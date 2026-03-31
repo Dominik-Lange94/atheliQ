@@ -3,38 +3,70 @@ import { useUpdateWeight, useRemoveCard, useLogEntry, useEditCard } from '../../
 import CustomCardTable from './CustomCardTable'
 
 interface Props {
-  card: { _id: string; type: string; label: string; unit: string; color?: string }
+  card: { _id: string; type: string; label: string; unit: string; color?: string; chartType?: string }
   latest: { value: number; recordedAt: string; secondaryValue?: number } | null
   selected: boolean
   onToggleSelect: () => void
 }
 
 const COLOR_OPTIONS = [
-  { key: 'rose',   from: 'from-rose-500/10',   border: 'border-rose-500/20',   dot: 'bg-rose-400',   label: 'Rot' },
-  { key: 'orange', from: 'from-orange-500/10', border: 'border-orange-500/20', dot: 'bg-orange-400', label: 'Orange' },
-  { key: 'amber',  from: 'from-amber-500/10',  border: 'border-amber-500/20',  dot: 'bg-amber-400',  label: 'Gelb' },
-  { key: 'green',  from: 'from-green-500/10',  border: 'border-green-500/20',  dot: 'bg-green-400',  label: 'Grün' },
-  { key: 'teal',   from: 'from-teal-500/10',   border: 'border-teal-500/20',   dot: 'bg-teal-400',   label: 'Teal' },
-  { key: 'blue',   from: 'from-blue-500/10',   border: 'border-blue-500/20',   dot: 'bg-blue-400',   label: 'Blau' },
-  { key: 'indigo', from: 'from-indigo-500/10', border: 'border-indigo-500/20', dot: 'bg-indigo-400', label: 'Indigo' },
-  { key: 'purple', from: 'from-purple-500/10', border: 'border-purple-500/20', dot: 'bg-purple-400', label: 'Lila' },
-  { key: 'pink',   from: 'from-pink-500/10',   border: 'border-pink-500/20',   dot: 'bg-pink-400',   label: 'Pink' },
-  { key: 'yellow', from: 'from-[#FFD300]/10',  border: 'border-[#FFD300]/20',  dot: 'bg-[#FFD300]',  label: 'Gold' },
+  { key: 'rose',   from: 'from-rose-500/10',   border: 'border-rose-500/20',   dot: 'bg-rose-400' },
+  { key: 'orange', from: 'from-orange-500/10', border: 'border-orange-500/20', dot: 'bg-orange-400' },
+  { key: 'amber',  from: 'from-amber-500/10',  border: 'border-amber-500/20',  dot: 'bg-amber-400' },
+  { key: 'green',  from: 'from-green-500/10',  border: 'border-green-500/20',  dot: 'bg-green-400' },
+  { key: 'teal',   from: 'from-teal-500/10',   border: 'border-teal-500/20',   dot: 'bg-teal-400' },
+  { key: 'blue',   from: 'from-blue-500/10',   border: 'border-blue-500/20',   dot: 'bg-blue-400' },
+  { key: 'indigo', from: 'from-indigo-500/10', border: 'border-indigo-500/20', dot: 'bg-indigo-400' },
+  { key: 'purple', from: 'from-purple-500/10', border: 'border-purple-500/20', dot: 'bg-purple-400' },
+  { key: 'pink',   from: 'from-pink-500/10',   border: 'border-pink-500/20',   dot: 'bg-pink-400' },
+  { key: 'yellow', from: 'from-[#FFD300]/10',  border: 'border-[#FFD300]/20',  dot: 'bg-[#FFD300]' },
+]
+
+const CHART_TYPES = [
+  {
+    key: 'line',
+    label: 'Linie',
+    icon: (
+      <svg viewBox="0 0 40 24" fill="none" className="w-10 h-6">
+        <polyline points="2,20 10,12 18,15 26,6 38,10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    ),
+  },
+  {
+    key: 'bar',
+    label: 'Balken',
+    icon: (
+      <svg viewBox="0 0 40 24" fill="none" className="w-10 h-6">
+        <rect x="3"  y="10" width="6" height="12" rx="1" fill="currentColor" opacity="0.8" />
+        <rect x="12" y="6"  width="6" height="16" rx="1" fill="currentColor" opacity="0.8" />
+        <rect x="21" y="12" width="6" height="10" rx="1" fill="currentColor" opacity="0.8" />
+        <rect x="30" y="4"  width="6" height="18" rx="1" fill="currentColor" opacity="0.8" />
+      </svg>
+    ),
+  },
+  {
+    key: 'mixed',
+    label: 'Mix',
+    icon: (
+      <svg viewBox="0 0 40 24" fill="none" className="w-10 h-6">
+        <rect x="3"  y="12" width="5" height="10" rx="1" fill="currentColor" opacity="0.5" />
+        <rect x="11" y="8"  width="5" height="14" rx="1" fill="currentColor" opacity="0.5" />
+        <rect x="19" y="14" width="5" height="8"  rx="1" fill="currentColor" opacity="0.5" />
+        <rect x="27" y="6"  width="5" height="16" rx="1" fill="currentColor" opacity="0.5" />
+        <polyline points="2,20 10,12 18,15 26,6 38,10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    ),
+  },
 ]
 
 const DEFAULT_COLORS: Record<string, string> = {
-  heartrate: 'rose',
-  calories:  'orange',
-  weight:    'blue',
-  steps:     'green',
-  sleep:     'purple',
-  custom:    'yellow',
+  heartrate: 'rose', calories: 'orange', weight: 'blue',
+  steps: 'green', sleep: 'purple', custom: 'yellow',
 }
 
 function getColorClasses(key: string) {
   return COLOR_OPTIONS.find((o) => o.key === key) ?? COLOR_OPTIONS[9]
 }
-
 function getEmoji(label: string): string {
   const match = label.match(/^\p{Emoji}/u)
   return match ? match[0] : '📊'
@@ -75,9 +107,9 @@ export default function StatCard({ card, latest, selected, onToggleSelect }: Pro
   const displayLabel = isCustom ? getCleanLabel(card.label) : card.label
   const displayUnit  = getDisplayUnit(card.unit)
 
-  // Local state so color/label update instantly without waiting for refetch
-  const [localColor, setLocalColor] = useState<string>(card.color ?? DEFAULT_COLORS[card.type] ?? 'yellow')
-  const [localLabel, setLocalLabel] = useState<string>(displayLabel)
+  const [localColor,     setLocalColor]     = useState(card.color ?? DEFAULT_COLORS[card.type] ?? 'yellow')
+  const [localLabel,     setLocalLabel]     = useState(displayLabel)
+  const [localChartType, setLocalChartType] = useState(card.chartType ?? 'line')
 
   const colorOption = getColorClasses(localColor)
 
@@ -87,34 +119,37 @@ export default function StatCard({ card, latest, selected, onToggleSelect }: Pro
   const [dateInput,       setDateInput]       = useState(new Date().toISOString().split('T')[0])
   const [confirmRemove,   setConfirmRemove]   = useState(false)
   const [showEdit,        setShowEdit]        = useState(false)
-  const [editLabelInput,  setEditLabelInput]  = useState(displayLabel)
-  const [editColorInput,  setEditColorInput]  = useState(localColor)
+  const [editLabel,       setEditLabel]       = useState(displayLabel)
+  const [editColor,       setEditColor]       = useState(localColor)
+  const [editChartType,   setEditChartType]   = useState(localChartType)
 
   const openEdit = () => {
-    setEditLabelInput(localLabel)
-    setEditColorInput(localColor)
+    setEditLabel(localLabel)
+    setEditColor(localColor)
+    setEditChartType(localChartType)
     setShowEdit(true)
   }
 
   const handleSaveEdit = () => {
-    const newLabel = isCustom ? `${emoji} ${editLabelInput.trim()}` : editLabelInput.trim()
-    setLocalLabel(editLabelInput.trim())
-    setLocalColor(editColorInput)
+    const newLabel = isCustom ? `${emoji} ${editLabel.trim()}` : editLabel.trim()
+    setLocalLabel(editLabel.trim())
+    setLocalColor(editColor)
+    setLocalChartType(editChartType)
     setShowEdit(false)
-    editCard.mutate({ id: card._id, label: newLabel, color: editColorInput })
+    editCard.mutate({ id: card._id, label: newLabel, color: editColor, chartType: editChartType })
   }
 
   const handleManualWeight = () => {
     const val = parseFloat(weightInput)
     if (isNaN(val)) return
     logEntry.mutate({
-      cardId: card._id,
-      value: val,
+      cardId: card._id, value: val,
       recordedAt: new Date(dateInput).toISOString(),
     }, { onSuccess: () => { setWeightInput(''); setShowWeightInput(false) } })
   }
 
-  const previewColor = getColorClasses(editColorInput)
+  const previewColor = getColorClasses(editColor)
+
 
   return (
     <>
@@ -122,37 +157,25 @@ export default function StatCard({ card, latest, selected, onToggleSelect }: Pro
         className={`relative group rounded-2xl border bg-gradient-to-br ${colorOption.from} ${colorOption.border} p-4 transition-all ${selected ? 'ring-2 ring-[#FFD300]/50' : ''} ${isCustom ? 'cursor-pointer' : ''}`}
         onClick={isCustom ? () => setShowTable(true) : undefined}
       >
-        {/* Select for chart */}
-        <button
-          onClick={(e) => { e.stopPropagation(); onToggleSelect() }}
-          className={`absolute top-3 right-16 w-5 h-5 rounded-full border transition-all ${selected ? 'bg-[#FFD300] border-[#FFD300]' : 'border-white/20 hover:border-white/40'}`}
-          title="Im Chart anzeigen"
-        >
-          {selected && (
-            <svg className="w-3 h-3 text-[#0f0f13] mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-            </svg>
-          )}
+        <button onClick={(e) => { e.stopPropagation(); onToggleSelect() }}
+          className={`absolute top-3 right-16 w-5 h-5 rounded-full border transition-all ${selected ? 'bg-[#FFD300] border-[#FFD300]' : 'border-white/20 hover:border-white/40'}`}>
+          {selected && <svg className="w-3 h-3 text-[#0f0f13] mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
         </button>
 
-        {/* Edit */}
-        <button
-          onClick={(e) => { e.stopPropagation(); openEdit() }}
+        <button onClick={(e) => { e.stopPropagation(); openEdit() }}
           className="absolute top-3 right-9 w-5 h-5 text-slate-500 hover:text-[#FFD300] opacity-0 group-hover:opacity-100 transition-all text-sm leading-none"
-          title="Karte bearbeiten"
-        >✎</button>
+          title="Bearbeiten">✎</button>
 
-        {/* Remove */}
-        <button
-          onClick={(e) => { e.stopPropagation(); setConfirmRemove(true) }}
+        <button onClick={(e) => { e.stopPropagation(); setConfirmRemove(true) }}
           className="absolute top-3 right-3 w-5 h-5 text-slate-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all"
-          title="Karte entfernen"
-        >✕</button>
+          title="Entfernen">✕</button>
 
         <div className="flex items-start gap-3">
           <span className="text-2xl">{emoji}</span>
           <div className="flex-1 min-w-0">
-            <p className="text-xs text-slate-400 uppercase tracking-wider truncate">{localLabel}</p>
+            <div className="flex items-center gap-1.5">
+                <p className="text-xs text-slate-400 uppercase tracking-wider truncate">{localLabel}</p>
+            </div>
             <p className="text-2xl font-semibold text-white mt-0.5">
               {latest?.value != null ? getDisplayValue(latest.value, card.unit, latest.secondaryValue) : '—'}
               <span className="text-sm font-normal text-slate-400 ml-1">{displayUnit}</span>
@@ -165,11 +188,7 @@ export default function StatCard({ card, latest, selected, onToggleSelect }: Pro
           </div>
         </div>
 
-        {isCustom && (
-          <div className="mt-2 pt-2 border-t border-white/10">
-            <p className="text-xs text-[#FFD300]/70">Tippen zum Öffnen →</p>
-          </div>
-        )}
+        {isCustom && <div className="mt-2 pt-2 border-t border-white/10"><p className="text-xs text-[#FFD300]/70">Tippen zum Öffnen →</p></div>}
 
         {isWeight && (
           <div className="mt-3 pt-3 border-t border-white/10 space-y-2">
@@ -203,37 +222,55 @@ export default function StatCard({ card, latest, selected, onToggleSelect }: Pro
       {/* Edit modal */}
       {showEdit && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-[#1a1a24] border border-white/10 rounded-2xl w-full max-w-sm p-6">
+          <div className="bg-[#1a1a24] border border-white/10 rounded-2xl w-full max-w-sm p-6 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-5">
               <h3 className="text-white font-semibold">Karte bearbeiten</h3>
               <button onClick={() => setShowEdit(false)} className="text-slate-400 hover:text-white text-xl leading-none">✕</button>
             </div>
 
+            {/* Label */}
             <div className="mb-4">
               <label className="block text-sm text-slate-300 mb-1.5">Titel</label>
-              <input value={editLabelInput} onChange={(e) => setEditLabelInput(e.target.value)}
+              <input value={editLabel} onChange={(e) => setEditLabel(e.target.value)}
                 className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-[#FFD300]/50 transition-all text-sm" />
             </div>
 
-            <div className="mb-5">
+            {/* Color */}
+            <div className="mb-4">
               <label className="block text-sm text-slate-300 mb-2">Farbe</label>
               <div className="grid grid-cols-5 gap-2 mb-3">
                 {COLOR_OPTIONS.map((c) => (
-                  <button key={c.key} onClick={() => setEditColorInput(c.key)} title={c.label}
-                    className={`flex items-center justify-center h-9 rounded-lg border transition-all ${
-                      editColorInput === c.key
-                        ? 'border-white/40 bg-white/10'
-                        : 'border-white/10 bg-white/3 hover:border-white/20'
-                    }`}>
+                  <button key={c.key} onClick={() => setEditColor(c.key)}
+                    className={`flex items-center justify-center h-9 rounded-lg border transition-all ${editColor === c.key ? 'border-white/40 bg-white/10' : 'border-white/10 bg-white/3 hover:border-white/20'}`}>
                     <span className={`w-4 h-4 rounded-full ${c.dot}`} />
                   </button>
                 ))}
               </div>
-              {/* Preview */}
-              <div className={`p-3 rounded-xl border bg-gradient-to-br ${previewColor.from} ${previewColor.border} flex items-center gap-2`}>
-                <span className="text-lg">{emoji}</span>
-                <span className="text-white text-sm font-medium">{editLabelInput || localLabel}</span>
+            </div>
+
+            {/* Chart type */}
+            <div className="mb-5">
+              <label className="block text-sm text-slate-300 mb-2">Diagramm-Typ</label>
+              <div className="grid grid-cols-3 gap-2">
+                {CHART_TYPES.map((ct) => (
+                  <button key={ct.key} onClick={() => setEditChartType(ct.key)}
+                    className={`flex flex-col items-center gap-1.5 py-3 px-2 rounded-xl border transition-all ${
+                      editChartType === ct.key
+                        ? 'border-[#FFD300]/50 bg-[#FFD300]/10 text-[#FFD300]'
+                        : 'border-white/10 bg-white/3 text-slate-400 hover:border-white/20 hover:text-white'
+                    }`}>
+                    {ct.icon}
+                    <span className="text-xs font-medium">{ct.label}</span>
+                  </button>
+                ))}
               </div>
+            </div>
+
+            {/* Preview */}
+            <div className={`mb-5 p-3 rounded-xl border bg-gradient-to-br ${previewColor.from} ${previewColor.border} flex items-center gap-2`}>
+              <span className="text-lg">{emoji}</span>
+              <span className="text-white text-sm font-medium">{editLabel || localLabel}</span>
+              <span className="ml-auto text-xs text-slate-400">{CHART_TYPES.find(c => c.key === editChartType)?.label}</span>
             </div>
 
             <div className="flex gap-3">
@@ -241,7 +278,7 @@ export default function StatCard({ card, latest, selected, onToggleSelect }: Pro
                 className="flex-1 py-2.5 rounded-xl border border-white/10 text-slate-300 hover:text-white text-sm font-medium transition-colors">
                 Abbrechen
               </button>
-              <button onClick={handleSaveEdit} disabled={editCard.isPending || !editLabelInput.trim()}
+              <button onClick={handleSaveEdit} disabled={editCard.isPending || !editLabel.trim()}
                 className="flex-1 py-2.5 rounded-xl bg-[#FFD300] hover:bg-[#e6be00] disabled:opacity-40 text-[#0f0f13] text-sm font-medium transition-colors">
                 {editCard.isPending ? '…' : 'Speichern'}
               </button>
@@ -250,7 +287,7 @@ export default function StatCard({ card, latest, selected, onToggleSelect }: Pro
         </div>
       )}
 
-      {/* Confirm remove modal */}
+      {/* Confirm remove */}
       {confirmRemove && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-[#1a1a24] border border-white/10 rounded-2xl w-full max-w-sm p-6">

@@ -5,6 +5,8 @@ export interface IStatCard extends Document {
   type: 'heartrate' | 'calories' | 'weight' | 'steps' | 'sleep' | 'custom'
   label: string
   unit: string
+  color?: string
+  chartType?: 'line' | 'bar' | 'mixed'
   visible: boolean
   order: number
   createdAt: Date
@@ -20,6 +22,8 @@ const StatCardSchema = new Schema<IStatCard>(
     },
     label: { type: String, required: true },
     unit: { type: String, required: true },
+    color: { type: String, default: null },
+    chartType: { type: String, enum: ['line', 'bar', 'mixed'], default: 'line' },
     visible: { type: Boolean, default: true },
     order: { type: Number, default: 0 },
   },

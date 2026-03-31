@@ -173,8 +173,12 @@ export default function AthleteDashboard() {
           <p className="text-slate-400 text-sm mt-1">Here's your performance overview</p>
         </div>
 
-        <MainChart cards={orderedCards} selectedCardIds={selectedCardIds} />
-
+        <MainChart
+          key={orderedCards.map((c: any) => `${c._id}-${c.chartType}`).join(',')}
+          cards={orderedCards}
+          selectedCardIds={selectedCardIds}
+        />
+        
         <div>
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-white font-medium">Your metrics</h2>

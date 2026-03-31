@@ -11,7 +11,8 @@ export const useCards = () =>
       const { data } = await api.get('/athlete/cards')
       return data.data
     },
-  })
+    staleTime: 0,
+  })  
 
 export const useAddCard = () => {
   const qc = useQueryClient()
@@ -136,8 +137,8 @@ export const useDeleteEntry = () => {
 export const useEditCard = () => {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: ({ id, label, color }: { id: string; label?: string; color?: string }) =>
-      api.patch(`/athlete/cards/${id}`, { label, color }),
+    mutationFn: ({ id, label, color, chartType }: { id: string; label?: string; color?: string; chartType?: string }) =>
+      api.patch(`/athlete/cards/${id}`, { label, color, chartType }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['cards'] })
       qc.invalidateQueries({ queryKey: ['latest'] })

@@ -109,11 +109,11 @@ router.patch('/weight', async (req: AuthRequest, res: Response) => {
 
 // PATCH /api/athlete/cards/:id — edit label and color
 router.patch("/cards/:id", async (req: AuthRequest, res: Response) => {
-  const { label, color } = req.body
+  const { label, color, chartType } = req.body
   try {
     const card = await StatCard.findOneAndUpdate(
       { _id: req.params.id, athleteId: req.user!.userId },
-      { ...(label ? { label } : {}), ...(color !== undefined ? { color } : {}) },
+      { ...(label ? { label } : {}), ...(color !== undefined ? { color } : {}), ...(chartType !== undefined ? { chartType } : {}) },
       { new: true }
     )
     if (!card) {
