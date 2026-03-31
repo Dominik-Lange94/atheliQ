@@ -1,0 +1,9 @@
+{
+  "name": "@fitness-app/shared",
+  "version": "1.0.0",
+  "main": "./schemas/index.ts",
+  "types": "./schemas/index.ts",
+  "dependencies": {
+    "zod": "^3.25.76"
+  }
+}
