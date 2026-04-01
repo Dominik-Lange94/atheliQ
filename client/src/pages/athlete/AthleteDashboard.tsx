@@ -25,6 +25,7 @@ import AddCardModal from "../../components/cards/AddCardModal";
 import MainChart from "../../components/chart/MainChart";
 import CoachesPage from "./CoachesPage";
 import WeatherClock from "../../components/layout/WeatherClock";
+import MobileConnectModal from "../../components/auth/MobileConnectModal";
 
 const STORAGE_KEY = "fittrack_selected_cards";
 
@@ -93,6 +94,7 @@ export default function AthleteDashboard() {
   const [arrangeMode, setArrangeMode] = useState(false);
   const [orderedCards, setOrderedCards] = useState<any[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [showMobileConnect, setShowMobileConnect] = useState(false);
 
   const [selectedCardIds, setSelectedCardIds] = useState<string[]>(() => {
     try {
@@ -222,7 +224,12 @@ export default function AthleteDashboard() {
           <span className="text-slate-400 text-sm hidden sm:block">
             {user?.name}
           </span>
-
+          <button
+            onClick={() => setShowMobileConnect(true)}
+            className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-white transition-colors px-3 py-1.5 rounded-lg border border-white/10 hover:border-white/20"
+          >
+            Mobile verbinden
+          </button>
           <button
             onClick={logout}
             className="text-xs text-slate-400 hover:text-white transition-colors px-3 py-1.5 rounded-lg border border-white/10 hover:border-white/20"
@@ -372,6 +379,9 @@ export default function AthleteDashboard() {
       </main>
 
       {showAddModal && <AddCardModal onClose={() => setShowAddModal(false)} />}
+      {showMobileConnect && (
+        <MobileConnectModal onClose={() => setShowMobileConnect(false)} />
+      )}
     </div>
   );
 }
