@@ -12,7 +12,7 @@ export const useCards = () =>
       return data.data
     },
     staleTime: 0,
-  })  
+  })
 
 export const useAddCard = () => {
   const qc = useQueryClient()
@@ -29,6 +29,7 @@ export const useRemoveCard = () => {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['cards'] })
       qc.invalidateQueries({ queryKey: ['latest'] })
+      qc.invalidateQueries({ queryKey: ['day'] })
     },
   })
 }
@@ -44,13 +45,32 @@ export const useLatestStats = () =>
     },
   })
 
+// ─── Day stats ────────────────────────────────────────────────────────────────
+
+export const useDayStats = (date: string) =>
+  useQuery({
+    queryKey: ['day', date],
+    queryFn: async () => {
+      const { data } = await api.get(`/stats/day?date=${date}`)
+      return data.data as { card: any; entry: any }[]
+    },
+    staleTime: 0,
+  })
+
 // ─── Entries for chart ────────────────────────────────────────────────────────
 
-export const useCardEntries = (cardId: string | null) =>
+export const useCardEntries = (
+  cardId: string | null,
+  opts?: { from?: string; to?: string }
+) =>
   useQuery({
-    queryKey: ['entries', cardId],
+    queryKey: ['entries', cardId, opts?.from, opts?.to],
     queryFn: async () => {
-      const { data } = await api.get(`/stats/entries/${cardId}`)
+      const params = new URLSearchParams()
+      if (opts?.from) params.set('from', opts.from)
+      if (opts?.to)   params.set('to', opts.to)
+      const qs = params.toString() ? `?${params.toString()}` : ''
+      const { data } = await api.get(`/stats/entries/${cardId}${qs}`)
       return data.data
     },
     enabled: !!cardId,
@@ -65,17 +85,23 @@ export const useLogEntry = () => {
     onSuccess: (_data, vars) => {
       qc.invalidateQueries({ queryKey: ['entries', vars.cardId] })
       qc.invalidateQueries({ queryKey: ['latest'] })
+      qc.invalidateQueries({ queryKey: ['day'] })
     },
   })
 }
 
-// ─── Weight ───────────────────────────────────────────────────────────────────
+// ─── Weight — now date-aware ──────────────────────────────────────────────────
 
 export const useUpdateWeight = () => {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (delta: number) => api.patch('/athlete/weight', { delta }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['latest'] }),
+    mutationFn: ({ delta, date }: { delta: number; date?: string }) =>
+      api.patch('/athlete/weight', { delta, date }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['latest'] })
+      qc.invalidateQueries({ queryKey: ['day'] })
+      qc.invalidateQueries({ queryKey: ['entries'] })
+    },
   })
 }
 
@@ -128,6 +154,7 @@ export const useDeleteEntry = () => {
     onSuccess: (_data, vars) => {
       qc.invalidateQueries({ queryKey: ['entries', vars.cardId] })
       qc.invalidateQueries({ queryKey: ['latest'] })
+      qc.invalidateQueries({ queryKey: ['day'] })
     },
   })
 }

@@ -7,6 +7,7 @@ interface Props {
   latest: { value: number; recordedAt: string; secondaryValue?: number } | null
   selected: boolean
   onToggleSelect: () => void
+  selectedDate?: string  // current calendar date from dashboard
 }
 
 const COLOR_OPTIONS = [
@@ -24,8 +25,7 @@ const COLOR_OPTIONS = [
 
 const CHART_TYPES = [
   {
-    key: 'line',
-    label: 'Linie',
+    key: 'line', label: 'Linie',
     icon: (
       <svg viewBox="0 0 40 24" fill="none" className="w-10 h-6">
         <polyline points="2,20 10,12 18,15 26,6 38,10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
@@ -33,8 +33,7 @@ const CHART_TYPES = [
     ),
   },
   {
-    key: 'bar',
-    label: 'Balken',
+    key: 'bar', label: 'Balken',
     icon: (
       <svg viewBox="0 0 40 24" fill="none" className="w-10 h-6">
         <rect x="3"  y="10" width="6" height="12" rx="1" fill="currentColor" opacity="0.8" />
@@ -45,8 +44,7 @@ const CHART_TYPES = [
     ),
   },
   {
-    key: 'mixed',
-    label: 'Mix',
+    key: 'mixed', label: 'Mix',
     icon: (
       <svg viewBox="0 0 40 24" fill="none" className="w-10 h-6">
         <rect x="3"  y="12" width="5" height="10" rx="1" fill="currentColor" opacity="0.5" />
@@ -92,17 +90,19 @@ function getDisplayUnit(unit: string): string {
 function getDisplayValue(value: number, unit: string, secondaryValue?: number): string {
   if (unit === 'min/km' && secondaryValue && value) return (secondaryValue / value).toFixed(2)
   if (unit === 'km/h'   && secondaryValue && value) return (value / (secondaryValue / 60)).toFixed(1)
-  return String(value)
+  const num = parseFloat(String(value))
+  if (isNaN(num)) return '—'
+  return parseFloat(num.toFixed(2)).toString()
 }
 
-export default function StatCard({ card, latest, selected, onToggleSelect }: Props) {
+export default function StatCard({ card, latest, selected, onToggleSelect, selectedDate }: Props) {
   const updateWeight = useUpdateWeight()
   const removeCard   = useRemoveCard()
   const logEntry     = useLogEntry()
   const editCard     = useEditCard()
 
-  const isCustom = card.type === 'custom'
-  const isWeight = card.type === 'weight'
+  const isCustom     = card.type === 'custom'
+  const isWeight     = card.type === 'weight'
   const emoji        = isCustom ? getEmoji(card.label) : getDefaultEmoji(card.type)
   const displayLabel = isCustom ? getCleanLabel(card.label) : card.label
   const displayUnit  = getDisplayUnit(card.unit)
@@ -116,7 +116,7 @@ export default function StatCard({ card, latest, selected, onToggleSelect }: Pro
   const [showTable,       setShowTable]       = useState(false)
   const [showWeightInput, setShowWeightInput] = useState(false)
   const [weightInput,     setWeightInput]     = useState('')
-  const [dateInput,       setDateInput]       = useState(new Date().toISOString().split('T')[0])
+  const [dateInput,       setDateInput]       = useState(selectedDate ?? new Date().toISOString().split('T')[0])
   const [confirmRemove,   setConfirmRemove]   = useState(false)
   const [showEdit,        setShowEdit]        = useState(false)
   const [editLabel,       setEditLabel]       = useState(displayLabel)
@@ -143,13 +143,18 @@ export default function StatCard({ card, latest, selected, onToggleSelect }: Pro
     const val = parseFloat(weightInput)
     if (isNaN(val)) return
     logEntry.mutate({
-      cardId: card._id, value: val,
-      recordedAt: new Date(dateInput).toISOString(),
+      cardId: card._id,
+      value: val,
+      recordedAt: new Date(dateInput + 'T12:00:00').toISOString(),
     }, { onSuccess: () => { setWeightInput(''); setShowWeightInput(false) } })
   }
 
-  const previewColor = getColorClasses(editColor)
+  // Weight +/- always uses the selected calendar date
+  const handleDelta = (delta: number) => {
+    updateWeight.mutate({ delta, date: selectedDate })
+  }
 
+  const previewColor = getColorClasses(editColor)
 
   return (
     <>
@@ -173,9 +178,7 @@ export default function StatCard({ card, latest, selected, onToggleSelect }: Pro
         <div className="flex items-start gap-3">
           <span className="text-2xl">{emoji}</span>
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-1.5">
-                <p className="text-xs text-slate-400 uppercase tracking-wider truncate">{localLabel}</p>
-            </div>
+            <p className="text-xs text-slate-400 uppercase tracking-wider truncate">{localLabel}</p>
             <p className="text-2xl font-semibold text-white mt-0.5">
               {latest?.value != null ? getDisplayValue(latest.value, card.unit, latest.secondaryValue) : '—'}
               <span className="text-sm font-normal text-slate-400 ml-1">{displayUnit}</span>
@@ -193,13 +196,23 @@ export default function StatCard({ card, latest, selected, onToggleSelect }: Pro
         {isWeight && (
           <div className="mt-3 pt-3 border-t border-white/10 space-y-2">
             <div className="flex items-center gap-2">
-              <button onClick={(e) => { e.stopPropagation(); updateWeight.mutate(-0.1) }} disabled={updateWeight.isPending}
+              <button onClick={(e) => { e.stopPropagation(); handleDelta(-0.1) }} disabled={updateWeight.isPending}
                 className="flex-1 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-white font-medium transition-colors text-sm disabled:opacity-50">− 0.1</button>
-              <button onClick={(e) => { e.stopPropagation(); updateWeight.mutate(0.1) }} disabled={updateWeight.isPending}
+              <button onClick={(e) => { e.stopPropagation(); handleDelta(0.1) }} disabled={updateWeight.isPending}
                 className="flex-1 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-white font-medium transition-colors text-sm disabled:opacity-50">+ 0.1</button>
               <button onClick={(e) => { e.stopPropagation(); setShowWeightInput(!showWeightInput) }}
                 className={`px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-all ${showWeightInput ? 'bg-[#FFD300] border-[#FFD300] text-[#0f0f13]' : 'bg-white/5 border-white/10 text-slate-300 hover:border-white/20'}`}>✏️</button>
             </div>
+
+            {/* Show which date the +/- applies to */}
+            {selectedDate && (
+              <p className="text-[10px] text-slate-600 text-center">
+                {selectedDate === new Date().toISOString().split('T')[0]
+                  ? 'Heute'
+                  : new Date(selectedDate + 'T12:00:00').toLocaleDateString('de-DE', { day: '2-digit', month: 'short' })}
+              </p>
+            )}
+
             {showWeightInput && (
               <div onClick={(e) => e.stopPropagation()} className="space-y-2">
                 <input type="number" value={weightInput} onChange={(e) => setWeightInput(e.target.value)}
@@ -227,15 +240,11 @@ export default function StatCard({ card, latest, selected, onToggleSelect }: Pro
               <h3 className="text-white font-semibold">Karte bearbeiten</h3>
               <button onClick={() => setShowEdit(false)} className="text-slate-400 hover:text-white text-xl leading-none">✕</button>
             </div>
-
-            {/* Label */}
             <div className="mb-4">
               <label className="block text-sm text-slate-300 mb-1.5">Titel</label>
               <input value={editLabel} onChange={(e) => setEditLabel(e.target.value)}
                 className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-[#FFD300]/50 transition-all text-sm" />
             </div>
-
-            {/* Color */}
             <div className="mb-4">
               <label className="block text-sm text-slate-300 mb-2">Farbe</label>
               <div className="grid grid-cols-5 gap-2 mb-3">
@@ -247,8 +256,6 @@ export default function StatCard({ card, latest, selected, onToggleSelect }: Pro
                 ))}
               </div>
             </div>
-
-            {/* Chart type */}
             <div className="mb-5">
               <label className="block text-sm text-slate-300 mb-2">Diagramm-Typ</label>
               <div className="grid grid-cols-3 gap-2">
@@ -265,14 +272,11 @@ export default function StatCard({ card, latest, selected, onToggleSelect }: Pro
                 ))}
               </div>
             </div>
-
-            {/* Preview */}
             <div className={`mb-5 p-3 rounded-xl border bg-gradient-to-br ${previewColor.from} ${previewColor.border} flex items-center gap-2`}>
               <span className="text-lg">{emoji}</span>
               <span className="text-white text-sm font-medium">{editLabel || localLabel}</span>
               <span className="ml-auto text-xs text-slate-400">{CHART_TYPES.find(c => c.key === editChartType)?.label}</span>
             </div>
-
             <div className="flex gap-3">
               <button onClick={() => setShowEdit(false)}
                 className="flex-1 py-2.5 rounded-xl border border-white/10 text-slate-300 hover:text-white text-sm font-medium transition-colors">
