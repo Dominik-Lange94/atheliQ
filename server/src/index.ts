@@ -1,11 +1,15 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
+import http from "http";
+import { Server as SocketIOServer } from "socket.io";
 import { connectDB } from "./lib/db";
 import authRoutes from "./routes/auth";
 import athleteRoutes from "./routes/athlete";
 import coachRoutes from "./routes/coach";
 import statsRoutes from "./routes/stats";
+import chatRoutes from "./routes/chat";
+import { initSocket } from "./socket";
 
 dotenv.config();
 
@@ -19,13 +23,25 @@ app.use("/api/auth", authRoutes);
 app.use("/api/athlete", athleteRoutes);
 app.use("/api/coach", coachRoutes);
 app.use("/api/stats", statsRoutes);
+app.use("/api/chat", chatRoutes);
 
 app.get("/api/health", (_req, res) => {
   res.json({ status: "ok" });
 });
 
+const server = http.createServer(app);
+
+const io = new SocketIOServer(server, {
+  cors: {
+    origin: "http://localhost:5173",
+    credentials: true,
+  },
+});
+
+initSocket(io);
+
 connectDB().then(() => {
-  app.listen(PORT, "0.0.0.0", () => {
+  server.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on http://localhost:${PORT}`);
   });
 });

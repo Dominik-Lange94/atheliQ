@@ -5,6 +5,8 @@ import RegisterPage from "./pages/RegisterPage";
 import AthleteDashboard from "./pages/athlete/AthleteDashboard";
 import CoachDashboard from "./pages/coach/CoachDashboard";
 import OnboardingPage from "./pages/onboarding/OnboardingPage";
+import ChatPage from "./pages/chat/ChatPage";
+import GlobalChatNotifier from "./components/chat/GlobalChatNotifier";
 
 const ProtectedRoute = ({
   children,
@@ -38,6 +40,8 @@ export default function App() {
   return (
     <AuthProvider>
       <BrowserRouter>
+        <GlobalChatNotifier />
+
         <Routes>
           <Route path="/" element={<RoleRedirect />} />
           <Route path="/login" element={<LoginPage />} />
@@ -63,6 +67,14 @@ export default function App() {
             element={
               <ProtectedRoute role="coach">
                 <CoachDashboard />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/chat"
+            element={
+              <ProtectedRoute>
+                <ChatPage />
               </ProtectedRoute>
             }
           />
