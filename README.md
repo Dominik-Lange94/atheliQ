@@ -1,14 +1,27 @@
 # FitTrack
 
-Modular fitness tracking app with athlete and coach roles.
+Modular fitness tracking app with athlete and coach roles — now with real-time chat, connection requests, and in-chat notifications.
 
 ## Stack
 
 - **Frontend**: React 18, Vite, TypeScript, TailwindCSS v4, React Query, Recharts
-- **Backend**: Node.js, Express, TypeScript, Mongoose
+- **Backend**: Node.js, Express, TypeScript, Mongoose, Socket.io
 - **Database**: MongoDB Atlas
 - **Auth**: JWT + bcrypt
 - **Validation**: Zod (shared between client and server)
+
+## Features
+
+- Modular fitness dashboard (custom metrics & tracking)
+- Athlete ↔ Coach system
+- Coach connection flow (request → accept/decline)
+- Real-time chat (Socket.io)
+- Chat-based notification system:
+  - Connection requests
+  - Accept / decline responses
+  - Metric permission updates
+- Fine-grained metric sharing
+- Unread message tracking
 
 ## Setup
 
@@ -64,20 +77,48 @@ Open http://localhost:5173
 ## Project structure
 
 ```
-fitness-app/
-├── client/               # React frontend
+atheliq/
+├── client/
 │   └── src/
-│       ├── components/   # StatCard, AddCardModal, MainChart
-│       ├── hooks/        # useAuth, useStats (React Query)
-│       ├── lib/          # axios client
-│       └── pages/        # LoginPage, RegisterPage, AthleteDashboard, CoachDashboard
-├── server/               # Express backend
+│       ├── components/
+│       │   ├── auth/         # Mobile connect modal
+│       │   ├── cards/        # Stat cards & tables
+│       │   ├── chart/        # Charts (Recharts)
+│       │   ├── chat/         # Chat UI (Sidebar, Window, Notifier)
+│       │   ├── layout/       # Layout components
+│       │   └── ui/           # UI helpers (MotivationBot)
+│       ├── hooks/            # useAuth, useStats, useCoach, chat hooks
+│       ├── lib/              # API client, socket connection
+│       ├── pages/
+│       │   ├── athlete/      # Athlete dashboard & coach management
+│       │   ├── coach/        # Coach dashboard
+│       │   ├── chat/         # Chat page
+│       │   ├── onboarding/
+│       │   ├── LoginPage
+│       │   └── RegisterPage
+│       └── types/            # Shared frontend types
+│
+├── server/
 │   └── src/
-│       ├── models/       # User, StatCard, StatEntry, CoachAthlete
-│       ├── routes/       # auth, athlete, coach, stats
-│       ├── middleware/   # JWT auth, role guard
-│       └── lib/          # db connection, jwt utils
+│       ├── models/           # MongoDB models
+│       │   ├── User
+│       │   ├── CoachAthlete
+│       │   ├── ChatThread
+│       │   ├── ChatMessage
+│       │   ├── StatCard
+│       │   └── StatEntry
+│       ├── routes/
+│       │   ├── auth
+│       │   ├── athlete
+│       │   ├── coach         # connect, permissions, relations
+│       │   ├── chat          # threads, messages, accept/decline
+│       │   └── stats
+│       ├── middleware/       # JWT auth & role guards
+│       ├── lib/              # db + jwt utils
+│       ├── socket.ts         # real-time chat (Socket.io)
+│       └── index.ts          # server entry
+│
 └── shared/
-    └── schemas/          # Zod schemas shared by client + server
+    └── schemas/              # Zod schemas (shared)
 ```
 
