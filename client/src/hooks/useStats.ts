@@ -1,9 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../lib/api";
-import type {
-  CreateStatCardInput,
-  CreateStatEntryInput,
-} from "@shared/schemas";
+import type { CreateStatCardInput, CreateStatEntryInput } from "@shared/schemas";
 
 // ─── Cards ────────────────────────────────────────────────────────────────────
 
@@ -20,8 +17,7 @@ export const useCards = () =>
 export const useAddCard = () => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (input: CreateStatCardInput) =>
-      api.post("/athlete/cards", input),
+    mutationFn: (input: CreateStatCardInput) => api.post("/athlete/cards", input),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["cards"] }),
   });
 };
@@ -72,7 +68,7 @@ export const useCardEntries = (
     queryFn: async () => {
       const params = new URLSearchParams();
       if (opts?.from) params.set("from", opts.from);
-      if (opts?.to) params.set("to", opts.to);
+      if (opts?.to)   params.set("to",   opts.to);
       const qs = params.toString() ? `?${params.toString()}` : "";
       const { data } = await api.get(`/stats/entries/${cardId}${qs}`);
       return data.data;
@@ -85,8 +81,7 @@ export const useCardEntries = (
 export const useLogEntry = () => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (input: CreateStatEntryInput) =>
-      api.post("/stats/entries", input),
+    mutationFn: (input: CreateStatEntryInput) => api.post("/stats/entries", input),
     onSuccess: (_data, vars) => {
       qc.invalidateQueries({ queryKey: ["entries", vars.cardId] });
       qc.invalidateQueries({ queryKey: ["latest"] });
@@ -95,7 +90,7 @@ export const useLogEntry = () => {
   });
 };
 
-// ─── Weight — now date-aware ──────────────────────────────────────────────────
+// ─── Weight — date-aware ──────────────────────────────────────────────────────
 
 export const useUpdateWeight = () => {
   const qc = useQueryClient();
@@ -125,17 +120,42 @@ export const useCoachAthletes = (userId?: string) =>
     refetchOnWindowFocus: true,
   });
 
-export const useAthleteStats = (athleteId: string | null) =>
+// Athlete stats with optional date range
+export const useAthleteStats = (
+  athleteId: string | null,
+  opts?: { from?: string; to?: string }
+) =>
   useQuery({
-    queryKey: ["athlete-stats", athleteId],
+    queryKey: ["athlete-stats", athleteId, opts?.from, opts?.to],
     queryFn: async () => {
-      const { data } = await api.get(`/coach/athletes/${athleteId}/stats`);
-      return data.data;
+      const params = new URLSearchParams();
+      if (opts?.from) params.set("from", opts.from);
+      if (opts?.to)   params.set("to",   opts.to);
+      const qs = params.toString() ? `?${params.toString()}` : "";
+      const { data } = await api.get(`/coach/athletes/${athleteId}/stats${qs}`);
+      // Return both stats data and activity flag
+      return { stats: data.data, isActive: data.isActive ?? null };
     },
     enabled: !!athleteId,
     staleTime: 0,
     refetchOnMount: "always",
     refetchOnWindowFocus: true,
+  });
+
+// Activity status for all athletes in a date range
+export const useAthletesActivity = (opts: { from?: string; to?: string }) =>
+  useQuery({
+    queryKey: ["athletes-activity", opts.from, opts.to],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (opts.from) params.set("from", opts.from);
+      if (opts.to)   params.set("to",   opts.to);
+      const { data } = await api.get(`/coach/athletes/activity?${params.toString()}`);
+      // Returns [{athleteId, isActive}]
+      return data.data as { athleteId: string; isActive: boolean }[];
+    },
+    enabled: !!(opts.from || opts.to),
+    staleTime: 30000,
   });
 
 export const useMyCoaches = () =>
@@ -150,13 +170,8 @@ export const useMyCoaches = () =>
 export const useUpdatePermissions = () => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({
-      coachId,
-      allowedMetrics,
-    }: {
-      coachId: string;
-      allowedMetrics: string[];
-    }) => api.patch(`/coach/permissions/${coachId}`, { allowedMetrics }),
+    mutationFn: ({ coachId, allowedMetrics }: { coachId: string; allowedMetrics: string[] }) =>
+      api.patch(`/coach/permissions/${coachId}`, { allowedMetrics }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["my-coaches"] }),
   });
 };
@@ -181,17 +196,8 @@ export const useDeleteEntry = () => {
 export const useEditCard = () => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({
-      id,
-      label,
-      color,
-      chartType,
-    }: {
-      id: string;
-      label?: string;
-      color?: string;
-      chartType?: string;
-    }) => api.patch(`/athlete/cards/${id}`, { label, color, chartType }),
+    mutationFn: ({ id, label, color, chartType }: { id: string; label?: string; color?: string; chartType?: string }) =>
+      api.patch(`/athlete/cards/${id}`, { label, color, chartType }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["cards"] });
       qc.invalidateQueries({ queryKey: ["latest"] });
