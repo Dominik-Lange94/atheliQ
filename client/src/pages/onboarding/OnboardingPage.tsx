@@ -1,4 +1,7 @@
 import { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { api } from "../../lib/api";
+import { useAuth } from "../../hooks/useAuth";
 
 type PrimaryGoal =
   | "lose_fat"
@@ -62,6 +65,26 @@ type EventType =
 
 type Gender = "female" | "male" | "other" | "prefer_not_to_say";
 
+type GoalSpeed = "gentle" | "balanced" | "aggressive";
+type TrainingLocation = "gym" | "home" | "outdoor" | "mixed";
+type EquipmentLevel = "none" | "basic" | "full_gym";
+type SleepQuality = "poor" | "okay" | "good";
+type StressLevel = "low" | "moderate" | "high";
+type MealStructure = "unstructured" | "somewhat_structured" | "structured";
+type AiTone = "supportive" | "direct" | "coach_like";
+type UnitSystem = "metric" | "imperial";
+
+type Limitation =
+  | "none"
+  | "back"
+  | "knee"
+  | "shoulder"
+  | "low_energy"
+  | "medical"
+  | "other";
+
+type Weekday = "mon" | "tue" | "wed" | "thu" | "fri" | "sat" | "sun";
+
 type OnboardingData = {
   currentWeightKg: string;
   targetWeightKg: string;
@@ -88,9 +111,29 @@ type OnboardingData = {
 
   startMode: StartMode | null;
   selectedTemplate: TemplatePreset | null;
+
+  goalSpeed: GoalSpeed | null;
+  trainingLocation: TrainingLocation | null;
+  equipmentLevel: EquipmentLevel | null;
+  sleepQuality: SleepQuality | null;
+  stressLevel: StressLevel | null;
+  mealStructure: MealStructure | null;
+  aiTone: AiTone | null;
+  unitSystem: UnitSystem | null;
+  availableDays: Weekday[];
+  limitations: Limitation[];
+  notes: string;
 };
 
-const STORAGE_KEY = "fittrack_onboarding_v2_draft";
+type AuthUser = {
+  _id: string;
+  name: string;
+  email: string;
+  role: "athlete" | "coach";
+  onboardingCompleted?: boolean;
+};
+
+const STORAGE_KEY = "fittrack_onboarding_v3_draft";
 const COMPLETED_KEY = "fittrack_onboarding_completed";
 
 const INITIAL_DATA: OnboardingData = {
@@ -119,6 +162,18 @@ const INITIAL_DATA: OnboardingData = {
 
   startMode: null,
   selectedTemplate: null,
+
+  goalSpeed: null,
+  trainingLocation: null,
+  equipmentLevel: null,
+  sleepQuality: null,
+  stressLevel: null,
+  mealStructure: null,
+  aiTone: null,
+  unitSystem: "metric",
+  availableDays: [],
+  limitations: [],
+  notes: "",
 };
 
 function loadDraft(): OnboardingData {
@@ -136,18 +191,21 @@ function calculateAge(day: string, month: string, year: string): number | null {
   const m = Number(month);
   const y = Number(year);
   if (!d || !m || !y) return null;
+
   const birthDate = new Date(y, m - 1, d);
   if (Number.isNaN(birthDate.getTime())) return null;
 
   const today = new Date();
   let age = today.getFullYear() - birthDate.getFullYear();
   const monthDiff = today.getMonth() - birthDate.getMonth();
+
   if (
     monthDiff < 0 ||
     (monthDiff === 0 && today.getDate() < birthDate.getDate())
   ) {
     age--;
   }
+
   return age >= 0 ? age : null;
 }
 
@@ -165,6 +223,21 @@ function getBmiCategory(bmi: number | null): string {
   if (bmi < 25) return "Normal range";
   if (bmi < 30) return "Overweight";
   return "Obesity range";
+}
+
+function formatWeightDelta(currentWeightKg: string, targetWeightKg: string) {
+  const current = Number(currentWeightKg);
+  const target = Number(targetWeightKg);
+  if (!current || !target) return null;
+  return Number((target - current).toFixed(1));
+}
+
+function isoFromParts(day: string, month: string, year: string): string | null {
+  if (!day || !month || !year) return null;
+  const dd = String(day).padStart(2, "0");
+  const mm = String(month).padStart(2, "0");
+  const yyyy = String(year);
+  return `${yyyy}-${mm}-${dd}`;
 }
 
 const GOAL_OPTIONS: {
@@ -211,10 +284,7 @@ const GOAL_OPTIONS: {
   },
 ];
 
-const REASON_OPTIONS: {
-  value: Reason;
-  title: string;
-}[] = [
+const REASON_OPTIONS: { value: Reason; title: string }[] = [
   { value: "confidence", title: "Für mein Selbstbewusstsein" },
   { value: "health", title: "Für meine Gesundheit" },
   { value: "fitness", title: "Für meine Fitness" },
@@ -223,10 +293,7 @@ const REASON_OPTIONS: {
   { value: "other", title: "Aus einem anderen Grund" },
 ];
 
-const EVENT_OPTIONS: {
-  value: EventType;
-  title: string;
-}[] = [
+const EVENT_OPTIONS: { value: EventType; title: string }[] = [
   { value: "vacation", title: "Urlaub" },
   { value: "wedding", title: "Hochzeit" },
   { value: "competition", title: "Sportwettbewerb" },
@@ -309,10 +376,7 @@ const PAIN_OPTIONS: { value: PainPoint; title: string }[] = [
   { value: "other", title: "Etwas anderes" },
 ];
 
-const DIET_OPTIONS: {
-  value: DietPreference;
-  title: string;
-}[] = [
+const DIET_OPTIONS: { value: DietPreference; title: string }[] = [
   { value: "classic", title: "Klassisch" },
   { value: "pescetarian", title: "Pescetarisch" },
   { value: "vegetarian", title: "Vegetarisch" },
@@ -320,6 +384,120 @@ const DIET_OPTIONS: {
   { value: "high_protein", title: "High Protein" },
   { value: "flexible", title: "Flexibel" },
   { value: "none", title: "Keine Präferenz" },
+];
+
+const GOAL_SPEED_OPTIONS: {
+  value: GoalSpeed;
+  title: string;
+  subtitle: string;
+}[] = [
+  {
+    value: "gentle",
+    title: "Sanft",
+    subtitle: "Nachhaltig und mit wenig Druck",
+  },
+  {
+    value: "balanced",
+    title: "Ausgewogen",
+    subtitle: "Guter Mix aus Tempo und Alltagstauglichkeit",
+  },
+  {
+    value: "aggressive",
+    title: "Ambitioniert",
+    subtitle: "Schnellerer Fokus, wenn dein Alltag das hergibt",
+  },
+];
+
+const TRAINING_LOCATION_OPTIONS: {
+  value: TrainingLocation;
+  title: string;
+  subtitle: string;
+}[] = [
+  {
+    value: "gym",
+    title: "Fitnessstudio",
+    subtitle: "Zugang zu Geräten und Gewichten",
+  },
+  {
+    value: "home",
+    title: "Zuhause",
+    subtitle: "Home-Workouts oder kleines Setup",
+  },
+  {
+    value: "outdoor",
+    title: "Draußen",
+    subtitle: "Laufen, Walken, Calisthenics, Sportplatz",
+  },
+  { value: "mixed", title: "Gemischt", subtitle: "Je nach Zeit und Situation" },
+];
+
+const EQUIPMENT_OPTIONS: {
+  value: EquipmentLevel;
+  title: string;
+  subtitle: string;
+}[] = [
+  { value: "none", title: "Kein Equipment", subtitle: "Nur Körpergewicht" },
+  {
+    value: "basic",
+    title: "Basis-Equipment",
+    subtitle: "Kurzhanteln, Bänder, Matte etc.",
+  },
+  {
+    value: "full_gym",
+    title: "Volles Gym",
+    subtitle: "Maschinen, Hanteln, volle Auswahl",
+  },
+];
+
+const SLEEP_OPTIONS: { value: SleepQuality; title: string }[] = [
+  { value: "poor", title: "Eher schlecht" },
+  { value: "okay", title: "Okay" },
+  { value: "good", title: "Gut" },
+];
+
+const STRESS_OPTIONS: { value: StressLevel; title: string }[] = [
+  { value: "low", title: "Niedrig" },
+  { value: "moderate", title: "Mittel" },
+  { value: "high", title: "Hoch" },
+];
+
+const MEAL_STRUCTURE_OPTIONS: { value: MealStructure; title: string }[] = [
+  { value: "unstructured", title: "Eher ungeordnet" },
+  { value: "somewhat_structured", title: "Teils strukturiert" },
+  { value: "structured", title: "Klar strukturiert" },
+];
+
+const AI_TONE_OPTIONS: { value: AiTone; title: string; subtitle: string }[] = [
+  {
+    value: "supportive",
+    title: "Supportive",
+    subtitle: "Freundlich, motivierend, weich",
+  },
+  {
+    value: "direct",
+    title: "Direkt",
+    subtitle: "Klar, knapp, ehrlich",
+  },
+  {
+    value: "coach_like",
+    title: "Coach-like",
+    subtitle: "Strukturiert, sachlich, führend",
+  },
+];
+
+const UNIT_OPTIONS: { value: UnitSystem; title: string }[] = [
+  { value: "metric", title: "Metrisch (kg, cm)" },
+  { value: "imperial", title: "Imperial (lb, ft)" },
+];
+
+const LIMITATION_OPTIONS: { value: Limitation; title: string }[] = [
+  { value: "none", title: "Keine Einschränkung" },
+  { value: "back", title: "Rücken" },
+  { value: "knee", title: "Knie" },
+  { value: "shoulder", title: "Schulter" },
+  { value: "low_energy", title: "Wenig Energie / Erschöpfung" },
+  { value: "medical", title: "Medizinische Einschränkung" },
+  { value: "other", title: "Etwas anderes" },
 ];
 
 const START_OPTIONS: {
@@ -383,6 +561,16 @@ const TEMPLATE_OPTIONS: {
     title: "Minimal Tracker",
     subtitle: "Nur die wichtigsten 2–3 Startmetriken",
   },
+];
+
+const WEEKDAY_OPTIONS: { value: Weekday; label: string }[] = [
+  { value: "mon", label: "Mo" },
+  { value: "tue", label: "Di" },
+  { value: "wed", label: "Mi" },
+  { value: "thu", label: "Do" },
+  { value: "fri", label: "Fr" },
+  { value: "sat", label: "Sa" },
+  { value: "sun", label: "So" },
 ];
 
 function StepShell({
@@ -525,8 +713,44 @@ function MultiSelectCard({
   );
 }
 
+function InfoCard({
+  title,
+  text,
+  accent = "cyan",
+}: {
+  title: string;
+  text: string;
+  accent?: "cyan" | "yellow";
+}) {
+  const styles =
+    accent === "yellow"
+      ? "border-[#FFD300]/20 bg-[#FFD300]/5 text-[#FFD300]"
+      : "border-cyan-400/20 bg-cyan-400/5 text-cyan-300";
+
+  return (
+    <div className={`rounded-2xl border p-5 ${styles}`}>
+      <div className="flex items-start gap-3">
+        <div
+          className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border ${
+            accent === "yellow"
+              ? "bg-[#FFD300]/10 border-[#FFD300]/20"
+              : "bg-cyan-400/10 border-cyan-400/20"
+          }`}
+        >
+          <span className="text-lg">⌚</span>
+        </div>
+        <div>
+          <p className="font-medium">{title}</p>
+          <p className="text-sm leading-6 mt-1 text-slate-300">{text}</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function buildPresetSummary(data: OnboardingData): string[] {
   if (data.startMode === "blank") return ["Leeres Dashboard", "Keine Presets"];
+
   if (data.startMode === "template") {
     const selected = TEMPLATE_OPTIONS.find(
       (t) => t.value === data.selectedTemplate
@@ -552,11 +776,42 @@ function buildPresetSummary(data: OnboardingData): string[] {
   }
 }
 
+function stepTitle(step: number) {
+  switch (step) {
+    case 0:
+      return "Dein Ziel";
+    case 1:
+      return "Dein Warum";
+    case 2:
+      return "Event";
+    case 3:
+      return "Ausgangslage";
+    case 4:
+      return "Aktivität";
+    case 5:
+      return "Hürden";
+    case 6:
+      return "Ernährung";
+    case 7:
+      return "Training Setup";
+    case 8:
+      return "Recovery & KI";
+    case 9:
+      return "Dein Start";
+    default:
+      return "Onboarding";
+  }
+}
+
 export default function OnboardingPage() {
+  const navigate = useNavigate();
+  const { user, login } = useAuth();
   const [step, setStep] = useState(0);
   const [data, setData] = useState<OnboardingData>(() => loadDraft());
+  const [submitting, setSubmitting] = useState(false);
+  const [serverError, setServerError] = useState("");
 
-  const totalSteps = 8;
+  const totalSteps = 10;
   const progress = ((step + 1) / totalSteps) * 100;
 
   const bmi = useMemo(
@@ -570,6 +825,11 @@ export default function OnboardingPage() {
   );
 
   const presetSummary = useMemo(() => buildPresetSummary(data), [data]);
+
+  const weightDelta = useMemo(
+    () => formatWeightDelta(data.currentWeightKg, data.targetWeightKg),
+    [data.currentWeightKg, data.targetWeightKg]
+  );
 
   const patch = (next: Partial<OnboardingData>) => {
     setData((prev) => {
@@ -588,15 +848,44 @@ export default function OnboardingPage() {
     });
   };
 
+  const toggleLimitation = (value: Limitation) => {
+    if (value === "none") {
+      patch({
+        limitations: data.limitations.includes("none") ? [] : ["none"],
+      });
+      return;
+    }
+
+    const next = data.limitations.filter((item) => item !== "none");
+    const exists = next.includes(value);
+
+    patch({
+      limitations: exists
+        ? next.filter((item) => item !== value)
+        : [...next, value],
+    });
+  };
+
+  const toggleDay = (value: Weekday) => {
+    const exists = data.availableDays.includes(value);
+    patch({
+      availableDays: exists
+        ? data.availableDays.filter((d) => d !== value)
+        : [...data.availableDays, value],
+    });
+  };
+
   const canContinue = () => {
     if (step === 0) return Boolean(data.primaryGoal);
     if (step === 1) return Boolean(data.reason);
+
     if (step === 2) {
       if (data.reason !== "event") return true;
       if (!data.eventType) return false;
       if (data.eventType === "none") return true;
       return Boolean(data.eventDay && data.eventMonth && data.eventYear);
     }
+
     if (step === 3) {
       return Boolean(
         data.currentWeightKg &&
@@ -607,35 +896,133 @@ export default function OnboardingPage() {
           data.gender
       );
     }
+
     if (step === 4) {
       return Boolean(
         data.workLifestyle &&
           data.activityLevel &&
           data.experienceLevel &&
-          data.workoutsPerWeek
+          data.workoutsPerWeek &&
+          data.goalSpeed
       );
     }
+
     if (step === 5) return data.painPoints.length > 0;
-    if (step === 6) return Boolean(data.dietPreference);
+    if (step === 6) return Boolean(data.dietPreference && data.mealStructure);
+
     if (step === 7) {
+      return Boolean(
+        data.trainingLocation &&
+          data.equipmentLevel &&
+          data.availableDays.length > 0
+      );
+    }
+
+    if (step === 8) {
+      return Boolean(
+        data.sleepQuality &&
+          data.stressLevel &&
+          data.aiTone &&
+          data.unitSystem &&
+          data.limitations.length > 0
+      );
+    }
+
+    if (step === 9) {
       if (!data.startMode) return false;
       if (data.startMode === "template") return Boolean(data.selectedTemplate);
       return true;
     }
+
     return true;
   };
 
-  const handleContinue = () => {
+  const buildPayload = () => {
+    return {
+      currentWeightKg: data.currentWeightKg
+        ? Number(data.currentWeightKg)
+        : null,
+      targetWeightKg: data.targetWeightKg ? Number(data.targetWeightKg) : null,
+      heightCm: data.heightCm ? Number(data.heightCm) : null,
+      birthDate: isoFromParts(data.birthDay, data.birthMonth, data.birthYear),
+      gender: data.gender,
+
+      primaryGoal: data.primaryGoal,
+      reason: data.reason,
+      eventType: data.eventType,
+      eventDate:
+        data.reason === "event" && data.eventType && data.eventType !== "none"
+          ? isoFromParts(data.eventDay, data.eventMonth, data.eventYear)
+          : null,
+
+      workLifestyle: data.workLifestyle,
+      activityLevel: data.activityLevel,
+      experienceLevel: data.experienceLevel,
+      workoutsPerWeek: data.workoutsPerWeek,
+      goalSpeed: data.goalSpeed,
+
+      painPoints: data.painPoints,
+      dietPreference: data.dietPreference,
+      mealStructure: data.mealStructure,
+
+      trainingLocation: data.trainingLocation,
+      equipmentLevel: data.equipmentLevel,
+      availableDays: data.availableDays,
+
+      sleepQuality: data.sleepQuality,
+      stressLevel: data.stressLevel,
+      aiTone: data.aiTone,
+      unitSystem: data.unitSystem,
+      limitations: data.limitations,
+      notes: data.notes.trim(),
+
+      startMode: data.startMode,
+      selectedTemplate: data.selectedTemplate,
+    };
+  };
+
+  const handleContinue = async () => {
+    setServerError("");
+
     if (step < totalSteps - 1) {
       setStep((prev) => prev + 1);
       return;
     }
 
-    localStorage.setItem(COMPLETED_KEY, "true");
-    console.log("Onboarding complete", data);
+    try {
+      setSubmitting(true);
+
+      await api.post("/athlete/onboarding", buildPayload());
+
+      localStorage.setItem(COMPLETED_KEY, "true");
+      localStorage.removeItem(STORAGE_KEY);
+
+      if (user) {
+        const token = localStorage.getItem("token");
+        if (token) {
+          const updatedUser: AuthUser = {
+            ...(user as AuthUser),
+            onboardingCompleted: true,
+          };
+          login(token, updatedUser);
+        }
+      }
+
+      navigate("/athlete", { replace: true });
+    } catch (error: any) {
+      console.error("Failed to complete onboarding", error);
+      setServerError(
+        error?.response?.data?.error ??
+          error?.message ??
+          "Onboarding konnte nicht gespeichert werden."
+      );
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handleBack = () => {
+    if (submitting) return;
     if (step > 0) setStep((prev) => prev - 1);
   };
 
@@ -669,16 +1056,7 @@ export default function OnboardingPage() {
             <p className="text-slate-400 text-xs">
               Step {step + 1} of {totalSteps}
             </p>
-            <p className="text-white text-sm font-medium">
-              {step === 0 && "Dein Ziel"}
-              {step === 1 && "Dein Warum"}
-              {step === 2 && "Event"}
-              {step === 3 && "Ausgangslage"}
-              {step === 4 && "Aktivität"}
-              {step === 5 && "Hürden"}
-              {step === 6 && "Ernährung"}
-              {step === 7 && "Dein Start"}
-            </p>
+            <p className="text-white text-sm font-medium">{stepTitle(step)}</p>
           </div>
         </div>
       </header>
@@ -693,11 +1071,17 @@ export default function OnboardingPage() {
           </div>
         </div>
 
+        {serverError && (
+          <div className="mb-6 rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+            {serverError}
+          </div>
+        )}
+
         {step === 0 && (
           <StepShell
             eyebrow="Ziel"
             title="Was ist dein Hauptziel?"
-            subtitle="Wir richten dein Dashboard später passend dazu ein. Du kannst alles später noch anpassen."
+            subtitle="Wir richten dein Dashboard und spätere KI-Empfehlungen passend dazu aus."
           >
             <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
               {GOAL_OPTIONS.map((goal) => (
@@ -718,7 +1102,7 @@ export default function OnboardingPage() {
           <StepShell
             eyebrow="Motivation"
             title="Warum möchtest du das erreichen?"
-            subtitle="Der Grund dahinter hilft später bei Zielen, Texten, Tipps und Erinnerungston."
+            subtitle="Der Grund hilft später bei Zielen, Texten, Tipps und dem Ton deiner KI."
           >
             <div className="space-y-3">
               {REASON_OPTIONS.map((reason) => (
@@ -737,14 +1121,14 @@ export default function OnboardingPage() {
           <StepShell
             eyebrow="Event"
             title="Gibt es ein Event, das dich motiviert?"
-            subtitle="Optional. Besonders hilfreich, wenn du auf ein klares Ziel oder Datum hinarbeitest."
+            subtitle="Optional. Hilfreich, wenn du auf ein klares Datum hinarbeitest."
           >
             {data.reason !== "event" ? (
               <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
                 <p className="text-white font-medium">Kein Event nötig</p>
                 <p className="text-slate-400 text-sm mt-2">
-                  Du hast kein zielgebundenes Event gewählt. Du kannst diesen
-                  Schritt einfach weitergehen.
+                  Du hast kein zielgebundenes Event gewählt. Diesen Schritt
+                  kannst du einfach weitergehen.
                 </p>
               </div>
             ) : (
@@ -771,7 +1155,7 @@ export default function OnboardingPage() {
                         onChange={(e) => patch({ eventDay: e.target.value })}
                         type="number"
                         placeholder="12"
-                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-[#FFD300]/50 transition-all"
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-[#FFD300]/50"
                       />
                     </div>
                     <div>
@@ -783,7 +1167,7 @@ export default function OnboardingPage() {
                         onChange={(e) => patch({ eventMonth: e.target.value })}
                         type="number"
                         placeholder="08"
-                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-[#FFD300]/50 transition-all"
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-[#FFD300]/50"
                       />
                     </div>
                     <div>
@@ -795,7 +1179,7 @@ export default function OnboardingPage() {
                         onChange={(e) => patch({ eventYear: e.target.value })}
                         type="number"
                         placeholder="2026"
-                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-[#FFD300]/50 transition-all"
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-[#FFD300]/50"
                       />
                     </div>
                   </div>
@@ -809,7 +1193,7 @@ export default function OnboardingPage() {
           <StepShell
             eyebrow="Ausgangslage"
             title="Lass uns deinen Startpunkt festlegen"
-            subtitle="Diese Werte helfen später bei Fortschritt, BMI, Zielrichtung und sinnvollen Presets."
+            subtitle="Diese Daten helfen bei Fortschritt, Zielrichtung und einem sinnvollen KI-Kontext."
           >
             <div className="grid lg:grid-cols-[1fr_0.8fr] gap-6">
               <div className="space-y-5">
@@ -826,7 +1210,7 @@ export default function OnboardingPage() {
                         }
                         placeholder="78"
                         type="number"
-                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-[#FFD300]/50 transition-all"
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-[#FFD300]/50"
                       />
                       <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 text-sm">
                         kg
@@ -847,7 +1231,7 @@ export default function OnboardingPage() {
                         }
                         placeholder="72"
                         type="number"
-                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-[#FFD300]/50 transition-all"
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-[#FFD300]/50"
                       />
                       <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 text-sm">
                         kg
@@ -866,7 +1250,7 @@ export default function OnboardingPage() {
                       onChange={(e) => patch({ heightCm: e.target.value })}
                       placeholder="180"
                       type="number"
-                      className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-[#FFD300]/50 transition-all"
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-[#FFD300]/50"
                     />
                     <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 text-sm">
                       cm
@@ -884,21 +1268,21 @@ export default function OnboardingPage() {
                       onChange={(e) => patch({ birthDay: e.target.value })}
                       type="number"
                       placeholder="Tag"
-                      className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-[#FFD300]/50 transition-all"
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-[#FFD300]/50"
                     />
                     <input
                       value={data.birthMonth}
                       onChange={(e) => patch({ birthMonth: e.target.value })}
                       type="number"
                       placeholder="Monat"
-                      className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-[#FFD300]/50 transition-all"
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-[#FFD300]/50"
                     />
                     <input
                       value={data.birthYear}
                       onChange={(e) => patch({ birthYear: e.target.value })}
                       type="number"
                       placeholder="Jahr"
-                      className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-[#FFD300]/50 transition-all"
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-[#FFD300]/50"
                     />
                   </div>
                 </div>
@@ -928,6 +1312,11 @@ export default function OnboardingPage() {
                     ))}
                   </div>
                 </div>
+
+                <InfoCard
+                  title="Daten automatisch statt manuell tracken"
+                  text="Wenn du Werte aus Smartwatch, Google Fit, Health Connect oder unserer Mobile App übernehmen willst, kannst du das später verbinden. So bekommt auch AthletiQ regelmäßigere und genauere Daten."
+                />
               </div>
 
               <div className="rounded-2xl border border-white/10 bg-white/5 p-5 h-fit">
@@ -946,6 +1335,12 @@ export default function OnboardingPage() {
                     Alter: {age ?? "—"} · Zielgewicht:{" "}
                     {data.targetWeightKg || "—"} kg
                   </p>
+                  {weightDelta !== null && (
+                    <p className="text-slate-500 text-xs mt-1">
+                      Veränderung: {weightDelta > 0 ? "+" : ""}
+                      {weightDelta} kg
+                    </p>
+                  )}
                 </div>
               </div>
             </div>
@@ -956,7 +1351,7 @@ export default function OnboardingPage() {
           <StepShell
             eyebrow="Aktivität"
             title="Wie sieht dein Alltag aktuell aus?"
-            subtitle="So versteht die App deinen echten Startpunkt und schlägt passendere Presets und Ziele vor."
+            subtitle="So versteht AthletiQ deinen echten Startpunkt und kann realistischer planen."
           >
             <div className="space-y-7">
               <div>
@@ -1022,6 +1417,23 @@ export default function OnboardingPage() {
                   ))}
                 </div>
               </div>
+
+              <div>
+                <p className="text-sm text-slate-300 mb-3">
+                  Wie schnell möchtest du vorgehen?
+                </p>
+                <div className="grid md:grid-cols-3 gap-4">
+                  {GOAL_SPEED_OPTIONS.map((option) => (
+                    <OptionCard
+                      key={option.value}
+                      selected={data.goalSpeed === option.value}
+                      title={option.title}
+                      subtitle={option.subtitle}
+                      onClick={() => patch({ goalSpeed: option.value })}
+                    />
+                  ))}
+                </div>
+              </div>
             </div>
           </StepShell>
         )}
@@ -1030,7 +1442,7 @@ export default function OnboardingPage() {
           <StepShell
             eyebrow="Hürden"
             title="Was fällt dir aktuell am schwersten?"
-            subtitle="Diese Infos können später Reminder, Coach-Ansichten und Tipps viel hilfreicher machen."
+            subtitle="Diese Infos machen Tipps, Reminder und Coach-Hinweise deutlich relevanter."
           >
             <div className="space-y-3">
               {PAIN_OPTIONS.map((option) => (
@@ -1049,26 +1461,194 @@ export default function OnboardingPage() {
           <StepShell
             eyebrow="Ernährung"
             title="Wie ernährst du dich aktuell?"
-            subtitle="Das muss noch kein Food-Tracking sein. Es hilft nur, spätere Empfehlungen besser auszurichten."
+            subtitle="Kein perfektes Food-Tracking nötig. Es geht um alltagstauglichen Kontext."
           >
-            <div className="grid md:grid-cols-2 gap-4">
-              {DIET_OPTIONS.map((option) => (
-                <OptionCard
-                  key={option.value}
-                  selected={data.dietPreference === option.value}
-                  title={option.title}
-                  onClick={() => patch({ dietPreference: option.value })}
-                />
-              ))}
+            <div className="space-y-6">
+              <div className="grid md:grid-cols-2 gap-4">
+                {DIET_OPTIONS.map((option) => (
+                  <OptionCard
+                    key={option.value}
+                    selected={data.dietPreference === option.value}
+                    title={option.title}
+                    onClick={() => patch({ dietPreference: option.value })}
+                  />
+                ))}
+              </div>
+
+              <div>
+                <p className="text-sm text-slate-300 mb-3">
+                  Wie strukturiert sind deine Mahlzeiten?
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {MEAL_STRUCTURE_OPTIONS.map((option) => (
+                    <ChoiceChip
+                      key={option.value}
+                      active={data.mealStructure === option.value}
+                      label={option.title}
+                      onClick={() => patch({ mealStructure: option.value })}
+                    />
+                  ))}
+                </div>
+              </div>
             </div>
           </StepShell>
         )}
 
         {step === 7 && (
           <StepShell
+            eyebrow="Training Setup"
+            title="Wie trainierst du realistisch?"
+            subtitle="Damit dein Start-Setup wirklich zu deinem Alltag passt."
+          >
+            <div className="space-y-7">
+              <div>
+                <p className="text-sm text-slate-300 mb-3">Trainingsort</p>
+                <div className="grid md:grid-cols-2 gap-4">
+                  {TRAINING_LOCATION_OPTIONS.map((option) => (
+                    <OptionCard
+                      key={option.value}
+                      selected={data.trainingLocation === option.value}
+                      title={option.title}
+                      subtitle={option.subtitle}
+                      onClick={() => patch({ trainingLocation: option.value })}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <p className="text-sm text-slate-300 mb-3">Equipment</p>
+                <div className="grid md:grid-cols-3 gap-4">
+                  {EQUIPMENT_OPTIONS.map((option) => (
+                    <OptionCard
+                      key={option.value}
+                      selected={data.equipmentLevel === option.value}
+                      title={option.title}
+                      subtitle={option.subtitle}
+                      onClick={() => patch({ equipmentLevel: option.value })}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <p className="text-sm text-slate-300 mb-3">
+                  An welchen Tagen ist Training realistisch?
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {WEEKDAY_OPTIONS.map((day) => (
+                    <ChoiceChip
+                      key={day.value}
+                      active={data.availableDays.includes(day.value)}
+                      label={day.label}
+                      onClick={() => toggleDay(day.value)}
+                    />
+                  ))}
+                </div>
+              </div>
+            </div>
+          </StepShell>
+        )}
+
+        {step === 8 && (
+          <StepShell
+            eyebrow="Recovery & KI"
+            title="Wie soll AthletiQ mit dir arbeiten?"
+            subtitle="So werden Ton, Empfehlungen und AI-Antworten passender."
+          >
+            <div className="space-y-7">
+              <div>
+                <p className="text-sm text-slate-300 mb-3">Schlafqualität</p>
+                <div className="flex flex-wrap gap-2">
+                  {SLEEP_OPTIONS.map((option) => (
+                    <ChoiceChip
+                      key={option.value}
+                      active={data.sleepQuality === option.value}
+                      label={option.title}
+                      onClick={() => patch({ sleepQuality: option.value })}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <p className="text-sm text-slate-300 mb-3">Stresslevel</p>
+                <div className="flex flex-wrap gap-2">
+                  {STRESS_OPTIONS.map((option) => (
+                    <ChoiceChip
+                      key={option.value}
+                      active={data.stressLevel === option.value}
+                      label={option.title}
+                      onClick={() => patch({ stressLevel: option.value })}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <p className="text-sm text-slate-300 mb-3">KI-Ton</p>
+                <div className="grid md:grid-cols-3 gap-4">
+                  {AI_TONE_OPTIONS.map((option) => (
+                    <OptionCard
+                      key={option.value}
+                      selected={data.aiTone === option.value}
+                      title={option.title}
+                      subtitle={option.subtitle}
+                      onClick={() => patch({ aiTone: option.value })}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <p className="text-sm text-slate-300 mb-3">Einheitensystem</p>
+                <div className="flex flex-wrap gap-2">
+                  {UNIT_OPTIONS.map((option) => (
+                    <ChoiceChip
+                      key={option.value}
+                      active={data.unitSystem === option.value}
+                      label={option.title}
+                      onClick={() => patch({ unitSystem: option.value })}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <p className="text-sm text-slate-300 mb-3">Einschränkungen</p>
+                <div className="grid md:grid-cols-2 gap-3">
+                  {LIMITATION_OPTIONS.map((option) => (
+                    <MultiSelectCard
+                      key={option.value}
+                      active={data.limitations.includes(option.value)}
+                      label={option.title}
+                      onClick={() => toggleLimitation(option.value)}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm text-slate-300 mb-2">
+                  Noch etwas, das AthletiQ oder ein Coach wissen sollte?
+                </label>
+                <textarea
+                  value={data.notes}
+                  onChange={(e) => patch({ notes: e.target.value })}
+                  rows={5}
+                  placeholder="Optional: z.B. Alltag, Schichtarbeit, frühere Verletzung, konkrete Ziele..."
+                  className="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-[#FFD300]/50 resize-none"
+                />
+              </div>
+            </div>
+          </StepShell>
+        )}
+
+        {step === 9 && (
+          <StepShell
             eyebrow="Startmodus"
             title="Wie möchtest du starten?"
-            subtitle="Du kannst dir direkt ein sinnvolles Setup erstellen lassen, eine Vorlage wählen oder komplett leer beginnen."
+            subtitle="Wir speichern jetzt dein Profil und können direkt ein sinnvolles Setup vorbereiten."
           >
             <div className="grid md:grid-cols-3 gap-4">
               {START_OPTIONS.map((option) => (
@@ -1110,24 +1690,84 @@ export default function OnboardingPage() {
               </div>
             )}
 
-            <div className="mt-6 rounded-2xl border border-white/10 bg-white/5 p-5">
-              <p className="text-white font-medium">
-                Was als Nächstes passiert
-              </p>
-              <p className="text-slate-400 text-sm mt-2">
-                Nach dem Abschluss kann die App direkt mit einem passenden
-                Dashboard starten.
-              </p>
+            <div className="mt-6 space-y-6">
+              <InfoCard
+                title="Health Connect, Google Fit oder Smartwatch später verbinden"
+                text="Wenn du deine Daten lieber automatisch übernehmen willst, kannst du sie später über unsere Mobile App oder Android Health/Health Connect anbinden. Dann landen Schritte, Schlaf und weitere Werte nicht nur manuell im System."
+                accent="yellow"
+              />
 
-              <div className="flex flex-wrap gap-2 mt-4">
-                {presetSummary.map((item) => (
-                  <span
-                    key={item}
-                    className="px-3 py-1.5 rounded-xl text-sm border border-[#FFD300]/20 bg-[#FFD300]/10 text-[#FFD300]"
-                  >
-                    {item}
-                  </span>
-                ))}
+              <div className="grid lg:grid-cols-[1fr_0.9fr] gap-6">
+                <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
+                  <p className="text-white font-medium">
+                    Was als Nächstes passiert
+                  </p>
+                  <p className="text-slate-400 text-sm mt-2">
+                    Nach dem Abschluss kann AthletiQ mit einem passenden Profil,
+                    einem besseren AI-Kontext und einem sinnvollen Dashboard
+                    starten.
+                  </p>
+
+                  <div className="flex flex-wrap gap-2 mt-4">
+                    {presetSummary.map((item) => (
+                      <span
+                        key={item}
+                        className="px-3 py-1.5 rounded-xl text-sm border border-[#FFD300]/20 bg-[#FFD300]/10 text-[#FFD300]"
+                      >
+                        {item}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-[#FFD300]/20 bg-[#FFD300]/5 p-5">
+                  <p className="text-[#FFD300] text-xs uppercase tracking-[0.18em] font-semibold">
+                    Review
+                  </p>
+                  <div className="mt-4 space-y-2 text-sm">
+                    <p className="text-white">
+                      Ziel:{" "}
+                      <span className="text-slate-300">
+                        {data.primaryGoal || "—"}
+                      </span>
+                    </p>
+                    <p className="text-white">
+                      Warum:{" "}
+                      <span className="text-slate-300">
+                        {data.reason || "—"}
+                      </span>
+                    </p>
+                    <p className="text-white">
+                      Training:{" "}
+                      <span className="text-slate-300">
+                        {data.trainingLocation || "—"} ·{" "}
+                        {data.equipmentLevel || "—"}
+                      </span>
+                    </p>
+                    <p className="text-white">
+                      KI-Ton:{" "}
+                      <span className="text-slate-300">
+                        {data.aiTone || "—"}
+                      </span>
+                    </p>
+                    <p className="text-white">
+                      Verfügbare Tage:{" "}
+                      <span className="text-slate-300">
+                        {data.availableDays.length > 0
+                          ? data.availableDays.join(", ")
+                          : "—"}
+                      </span>
+                    </p>
+                    <p className="text-white">
+                      Hürden:{" "}
+                      <span className="text-slate-300">
+                        {data.painPoints.length > 0
+                          ? data.painPoints.join(", ")
+                          : "—"}
+                      </span>
+                    </p>
+                  </div>
+                </div>
               </div>
             </div>
           </StepShell>
@@ -1137,7 +1777,7 @@ export default function OnboardingPage() {
           <button
             type="button"
             onClick={handleBack}
-            disabled={step === 0}
+            disabled={step === 0 || submitting}
             className="px-4 py-2.5 rounded-xl border border-white/10 text-slate-300 hover:text-white hover:border-white/20 transition-colors disabled:opacity-40"
           >
             Back
@@ -1146,10 +1786,14 @@ export default function OnboardingPage() {
           <button
             type="button"
             onClick={handleContinue}
-            disabled={!canContinue()}
+            disabled={!canContinue() || submitting}
             className="px-5 py-2.5 rounded-xl bg-[#FFD300] hover:bg-[#e6be00] disabled:opacity-40 text-[#0f0f13] font-medium transition-colors"
           >
-            {step === totalSteps - 1 ? "Finish setup" : "Continue"}
+            {submitting
+              ? "Wird gespeichert..."
+              : step === totalSteps - 1
+              ? "Finish setup"
+              : "Continue"}
           </button>
         </div>
       </main>

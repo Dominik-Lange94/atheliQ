@@ -18,7 +18,12 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { useAuth } from "../../hooks/useAuth";
-import { useCards, useLatestStats, useDayStats } from "../../hooks/useStats";
+import {
+  useCards,
+  useLatestStats,
+  useDayStats,
+  useReorderCards,
+} from "../../hooks/useStats";
 import { api } from "../../lib/api";
 import StatCard from "../../components/cards/StatCard";
 import AddCardModal from "../../components/cards/AddCardModal";
@@ -128,6 +133,7 @@ function SortableStatCard({
 export default function AthleteDashboard() {
   const { user, logout } = useAuth();
   const { data: cards = [], isLoading: cardsLoading } = useCards();
+  const reorderCards = useReorderCards();
   const { data: latestStats = [] } = useLatestStats();
   const [showAddModal, setShowAddModal] = useState(false);
   const [showCoaches, setShowCoaches] = useState(false);
@@ -156,19 +162,16 @@ export default function AthleteDashboard() {
   });
 
   useEffect(() => {
+    if (arrangeMode || activeId) return;
+
     if (cards.length > 0) {
-      setOrderedCards((prev) => {
-        if (prev.length === 0) return [...cards];
-        const ids = cards.map((c: any) => c._id);
-        const prevIds = prev.map((c: any) => c._id);
-        const reordered = prev
-          .filter((c: any) => ids.includes(c._id))
-          .map((c: any) => cards.find((fc: any) => fc._id === c._id) ?? c);
-        const newCards = cards.filter((c: any) => !prevIds.includes(c._id));
-        return [...reordered, ...newCards];
-      });
+      const sorted = [...cards].sort((a: any, b: any) => a.order - b.order);
+      setOrderedCards(sorted);
+      return;
     }
-  }, [cards]);
+
+    setOrderedCards([]);
+  }, [cards, arrangeMode, activeId]);
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(selectedCardIds));
@@ -191,18 +194,21 @@ export default function AthleteDashboard() {
   const handleDragStart = (e: DragStartEvent) =>
     setActiveId(e.active.id as string);
   const handleDragEnd = (event: DragEndEvent) => {
-    setActiveId(null);
     const { active, over } = event;
+    setActiveId(null);
+
     if (!over || active.id === over.id) return;
+
     setOrderedCards((prev) => {
       const oldIndex = prev.findIndex((c) => c._id === active.id);
       const newIndex = prev.findIndex((c) => c._id === over.id);
+
+      if (oldIndex === -1 || newIndex === -1) return prev;
+
       const newOrder = arrayMove(prev, oldIndex, newIndex);
-      api
-        .patch("/athlete/cards/reorder", {
-          order: newOrder.map((c, i) => ({ id: c._id, order: i })),
-        })
-        .catch(console.error);
+
+      reorderCards.mutate(newOrder);
+
       return newOrder;
     });
   };

@@ -118,22 +118,33 @@ router.get("/threads", async (req: AuthRequest, res: Response) => {
 
     const threadsRaw = await Promise.all(
       validRelations.map(async (relation: any) => {
-        const thread = await ensureThreadForRelation(relation);
-        if (!thread) return null;
+        try {
+          const thread = await ensureThreadForRelation(relation);
+          if (!thread) return null;
 
-        const unreadCount = await ChatMessage.countDocuments({
-          threadId: thread._id,
-          receiverId: req.user!.userId,
-          readAt: null,
-        });
+          const unreadCount = await ChatMessage.countDocuments({
+            threadId: thread._id,
+            receiverId: req.user!.userId,
+            readAt: null,
+          });
 
-        return {
-          ...thread.toObject(),
-          relationStatus: relation.status,
-          unreadCount,
-          otherUser:
-            req.user!.role === "coach" ? relation.athleteId : relation.coachId,
-        };
+          return {
+            ...thread.toObject(),
+            relationStatus: relation.status,
+            unreadCount,
+            otherUser:
+              req.user!.role === "coach"
+                ? relation.athleteId
+                : relation.coachId,
+          };
+        } catch (innerError) {
+          console.error(
+            "Failed relation thread build:",
+            relation?._id,
+            innerError
+          );
+          return null;
+        }
       })
     );
 

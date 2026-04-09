@@ -10,6 +10,7 @@ import coachRoutes from "./routes/coach";
 import statsRoutes from "./routes/stats";
 import chatRoutes from "./routes/chat";
 import { initSocket } from "./socket";
+import aiRoutes from "./routes/ai";
 
 dotenv.config();
 
@@ -24,6 +25,7 @@ app.use("/api/athlete", athleteRoutes);
 app.use("/api/coach", coachRoutes);
 app.use("/api/stats", statsRoutes);
 app.use("/api/chat", chatRoutes);
+app.use("/api/ai", aiRoutes);
 
 app.get("/api/health", (_req, res) => {
   res.json({ status: "ok" });

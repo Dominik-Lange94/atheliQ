@@ -1,70 +1,83 @@
-import { useState, useEffect } from 'react'
-
-const QUOTES = [
-  "Jeder Tag ist ein neuer Start. Du schaffst das! 💪",
-  "Kleine Fortschritte zählen auch — hauptsache du bewegst dich.",
-  "Dein zukünftiges Ich wird dir danken.",
-  "Konsistenz schlägt Perfektion. Bleib dran!",
-  "Du bist stärker als du denkst.",
-  "Kein Training ist verschwendete Zeit.",
-  "Fortschritt, nicht Perfektion — das ist das Ziel.",
-  "Der schwerste Schritt ist der erste. Den hast du schon gemacht.",
-  "Heute der schlechtere Teil von dir, morgen der bessere.",
-  "Deine Daten lügen nicht — du wächst.",
-]
+import { useState } from "react";
+import { useAiMotivation } from "../../hooks/useAi";
 
 interface Props {
-  hasData?: boolean
-  selectedDate?: string
+  hasData?: boolean;
+  selectedDate?: string;
 }
 
 export default function MotivationBot({ hasData, selectedDate }: Props) {
-  const [quote, setQuote] = useState('')
-  const [visible, setVisible] = useState(true)
+  const [visible, setVisible] = useState(true);
+  const { data, isLoading, refetch, isFetching } =
+    useAiMotivation(selectedDate);
 
-  useEffect(() => {
-    // Pick a quote based on date so it's consistent per day
-    const seed = selectedDate
-      ? new Date(selectedDate).getDate() + new Date(selectedDate).getMonth()
-      : new Date().getDate()
-    setQuote(QUOTES[seed % QUOTES.length])
-  }, [selectedDate])
-
-  if (!visible) return null
+  if (!visible) return null;
 
   return (
-    <div className="relative flex items-start gap-4 bg-white/3 border border-white/10 rounded-2xl p-4">
-      {/* Dismiss */}
-      <button
-        onClick={() => setVisible(false)}
-        className="absolute top-3 right-3 text-slate-600 hover:text-slate-400 transition-colors text-sm leading-none"
-        title="Ausblenden"
-      >✕</button>
+    <div className="mt-5 rounded-3xl border border-[#FFD300]/15 bg-gradient-to-br from-[#17171d] to-[#101015] p-4 shadow-[0_10px_40px_rgba(0,0,0,0.35)]">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <div className="flex items-center gap-2">
+            <div className="h-9 w-9 rounded-2xl bg-[#FFD300]/12 border border-[#FFD300]/20 flex items-center justify-center text-[#FFD300]">
+              ✦
+            </div>
+            <div>
+              <h3 className="text-white font-semibold">AthletiQ Bot</h3>
+              <p className="text-xs text-slate-400">
+                {data
+                  ? `${data.provider === "ollama" ? "Lokal" : "Cloud"} · ${
+                      data.model
+                    }`
+                  : "Intelligente Motivation"}
+              </p>
+            </div>
+          </div>
+        </div>
 
-      {/* Robot face */}
-      <div className="flex-shrink-0 w-12 h-12 rounded-2xl bg-[#FFD300]/10 border border-[#FFD300]/20 flex items-center justify-center text-2xl select-none">
-        🤖
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => refetch()}
+            disabled={isFetching}
+            className="text-xs px-3 py-1.5 rounded-xl border border-white/10 text-slate-300 hover:text-white hover:border-white/20 transition"
+          >
+            {isFetching ? "Lädt…" : "Neu"}
+          </button>
+          <button
+            onClick={() => setVisible(false)}
+            className="text-slate-500 hover:text-slate-300 text-sm"
+            aria-label="Schließen"
+          >
+            ✕
+          </button>
+        </div>
       </div>
 
-      {/* Speech bubble */}
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-1.5 mb-1">
-          <p className="text-[#FFD300] text-xs font-medium">AthletiQ Bot</p>
-          <span className="text-slate-600 text-xs">·</span>
-          <span className="text-slate-500 text-xs">Motivationscoach</span>
-          {!hasData && (
-            <span className="ml-auto text-[10px] text-slate-600 border border-white/10 rounded-full px-2 py-0.5">
-              KI-Analyse folgt
-            </span>
-          )}
-        </div>
-        <p className="text-slate-300 text-sm leading-relaxed">{quote}</p>
-        {!hasData && (
-          <p className="text-slate-600 text-xs mt-1.5">
-            Sobald du Daten trackst, analysiere ich deinen Fortschritt für dich.
+      <div className="mt-4 rounded-2xl border border-white/6 bg-white/[0.03] p-4">
+        {!hasData ? (
+          <p className="text-sm leading-6 text-slate-300">
+            Sobald du erste Werte einträgst, analysiere ich deine Entwicklung
+            und gebe dir passende Motivation und Hinweise.
+          </p>
+        ) : isLoading ? (
+          <p className="text-sm leading-6 text-slate-400">
+            AthletiQ analysiert gerade deine Daten…
+          </p>
+        ) : (
+          <p className="text-sm leading-6 text-slate-200">
+            {data?.text ||
+              "Ich konnte gerade keine Motivation generieren. Prüfe bitte, ob Ollama läuft."}
           </p>
         )}
       </div>
+
+      <div className="mt-3 flex flex-wrap gap-2">
+        <button
+          onClick={() => refetch()}
+          className="px-3 py-1.5 rounded-xl text-xs font-medium bg-[#FFD300]/10 text-[#FFD300] border border-[#FFD300]/20 hover:bg-[#FFD300]/15 transition"
+        >
+          Motivation aktualisieren
+        </button>
+      </div>
     </div>
-  )
+  );
 }

@@ -11,12 +11,60 @@ import {
 import ChatSidebar from "../../components/chat/ChatSidebar";
 import ChatWindow from "../../components/chat/ChatWindow";
 
+const AI_THREAD_ID = "atheliq-bot";
+
+type UiChatThread = ChatThread & {
+  isAssistantThread?: boolean;
+};
+
+type AiThreadResponse = {
+  thread: {
+    _id: string;
+    type?: "assistant";
+    title?: string;
+    lastMessage?: string;
+    lastMessageAt?: string;
+    unreadCount?: number;
+  };
+  messages: ChatMessage[];
+};
+
+const AI_META: ChatMessagesResponseMeta = {
+  relationStatus: "active",
+  isCoach: false,
+  isAthlete: true,
+};
+
+function buildAiThread(data?: AiThreadResponse | null): UiChatThread | null {
+  if (!data?.thread) return null;
+
+  return {
+    _id: AI_THREAD_ID,
+    coachId: "",
+    athleteId: "",
+    relationId: "",
+    relationStatus: "active",
+    lastMessage:
+      data.thread.lastMessage ||
+      "Frag mich nach Motivation, Trends oder Verbesserungen.",
+    lastMessageAt: data.thread.lastMessageAt || new Date().toISOString(),
+    unreadCount: data.thread.unreadCount ?? 0,
+    otherUser: {
+      _id: AI_THREAD_ID,
+      name: data.thread.title || "AthletiQ Bot",
+      email: "Lokaler KI-Assistent",
+      role: "coach",
+    },
+    isAssistantThread: true,
+  };
+}
+
 export default function ChatPage() {
   const navigate = useNavigate();
   const { user, token } = useAuth() as any;
 
   const [threads, setThreads] = useState<ChatThread[]>([]);
-  const [activeThread, setActiveThread] = useState<ChatThread | null>(null);
+  const [activeThread, setActiveThread] = useState<UiChatThread | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [messagesMeta, setMessagesMeta] =
     useState<ChatMessagesResponseMeta | null>(null);
@@ -26,28 +74,42 @@ export default function ChatPage() {
   const [sending, setSending] = useState(false);
   const [resolvingRequest, setResolvingRequest] = useState(false);
 
+  const [aiThread, setAiThread] = useState<UiChatThread | null>(null);
+  const [aiMessages, setAiMessages] = useState<ChatMessage[]>([]);
+  const [aiEnabled, setAiEnabled] = useState(false);
+
   const currentUserId = user?._id || user?.id || "";
   const currentUserRole = user?.role as "coach" | "athlete" | undefined;
+  const isAthlete = currentUserRole === "athlete";
+  const isAiThread = activeThread?._id === AI_THREAD_ID;
 
   const activeThreadIdRef = useRef<string | null>(null);
+  const initializedRef = useRef(false);
 
   useEffect(() => {
     activeThreadIdRef.current = activeThread?._id ?? null;
   }, [activeThread?._id]);
 
-  const sortedThreads = useMemo(() => {
-    return [...threads].sort((a, b) => {
-      const aTime = a.lastMessageAt ? new Date(a.lastMessageAt).getTime() : 0;
-      const bTime = b.lastMessageAt ? new Date(b.lastMessageAt).getTime() : 0;
-      return bTime - aTime;
-    });
-  }, [threads]);
-
   const notifyGlobalChatRefresh = () => {
     window.dispatchEvent(new Event("chat:threads:refresh"));
   };
 
+  const sortedThreads = useMemo(() => {
+    const combined: UiChatThread[] = [
+      ...(aiEnabled && aiThread ? [aiThread] : []),
+      ...threads,
+    ];
+
+    return [...combined].sort((a, b) => {
+      const aTime = a.lastMessageAt ? new Date(a.lastMessageAt).getTime() : 0;
+      const bTime = b.lastMessageAt ? new Date(b.lastMessageAt).getTime() : 0;
+      return bTime - aTime;
+    });
+  }, [threads, aiEnabled, aiThread]);
+
   const markThreadAsRead = useCallback(async (threadId: string) => {
+    if (!threadId || threadId === AI_THREAD_ID) return;
+
     try {
       await api.post(`/chat/threads/${threadId}/read`);
 
@@ -63,36 +125,103 @@ export default function ChatPage() {
     }
   }, []);
 
-  const loadThreads = useCallback(async (showLoader = false) => {
-    try {
-      if (showLoader) setThreadsLoading(true);
-
-      const { data } = await api.get("/chat/threads");
-      const items = (data.data ?? []) as ChatThread[];
-      const currentActiveId = activeThreadIdRef.current;
-
-      const normalizedItems = items.map((thread) =>
-        thread._id === currentActiveId ? { ...thread, unreadCount: 0 } : thread
-      );
-
-      setThreads(normalizedItems);
-
-      setActiveThread((prev) => {
-        if (normalizedItems.length === 0) return null;
-        if (!prev) return normalizedItems[0];
-        return (
-          normalizedItems.find((t) => t._id === prev._id) ?? normalizedItems[0]
-        );
-      });
-    } catch (error) {
-      console.error("Failed to load chat threads", error);
-    } finally {
-      if (showLoader) setThreadsLoading(false);
+  const loadAiThread = useCallback(async () => {
+    if (!isAthlete) {
+      setAiEnabled(false);
+      setAiThread(null);
+      setAiMessages([]);
+      return null;
     }
-  }, []);
+
+    try {
+      const { data } = await api.get("/ai/thread");
+      const payload = (data?.data ?? null) as AiThreadResponse | null;
+      const nextAiThread = buildAiThread(payload);
+
+      setAiThread(nextAiThread);
+      setAiMessages((payload?.messages ?? []) as ChatMessage[]);
+      setAiEnabled(!!nextAiThread);
+
+      return nextAiThread;
+    } catch (error) {
+      console.error("Failed to load AI thread", error);
+      setAiEnabled(false);
+      setAiThread(null);
+      setAiMessages([]);
+      return null;
+    }
+  }, [isAthlete]);
+
+  const loadThreads = useCallback(
+    async (showLoader = false) => {
+      try {
+        if (showLoader) setThreadsLoading(true);
+
+        const { data } = await api.get("/chat/threads");
+        const items = (data.data ?? []) as ChatThread[];
+        const currentActiveId = activeThreadIdRef.current;
+
+        const normalizedItems = items.map((thread) =>
+          thread._id === currentActiveId
+            ? { ...thread, unreadCount: 0 }
+            : thread
+        );
+
+        setThreads(normalizedItems);
+
+        setActiveThread((prev) => {
+          const aiCandidate =
+            aiEnabled && aiThread ? (aiThread as UiChatThread) : null;
+          const combined: UiChatThread[] = [
+            ...(aiCandidate ? [aiCandidate] : []),
+            ...normalizedItems,
+          ];
+
+          if (combined.length === 0) return null;
+
+          if (!prev) {
+            return combined[0];
+          }
+
+          const stillExists = combined.find((t) => t._id === prev._id);
+          return stillExists ?? combined[0];
+        });
+      } catch (error) {
+        console.error("Failed to load chat threads", error);
+      } finally {
+        if (showLoader) setThreadsLoading(false);
+      }
+    },
+    [aiEnabled, aiThread]
+  );
 
   const loadMessages = useCallback(
     async (threadId: string, showLoader = false) => {
+      if (!threadId) return;
+
+      if (threadId === AI_THREAD_ID) {
+        try {
+          if (showLoader) setMessagesLoading(true);
+
+          const { data } = await api.get("/ai/thread");
+          const payload = (data?.data ?? null) as AiThreadResponse | null;
+          const nextAiThread = buildAiThread(payload);
+
+          setAiThread(nextAiThread);
+          setAiMessages((payload?.messages ?? []) as ChatMessage[]);
+          setAiEnabled(!!nextAiThread);
+
+          setMessages((payload?.messages ?? []) as ChatMessage[]);
+          setMessagesMeta(AI_META);
+        } catch (error) {
+          console.error("Failed to load AI messages", error);
+        } finally {
+          if (showLoader) setMessagesLoading(false);
+        }
+
+        return;
+      }
+
       try {
         if (showLoader) setMessagesLoading(true);
 
@@ -123,8 +252,48 @@ export default function ChatPage() {
   );
 
   useEffect(() => {
-    loadThreads(true);
-  }, [loadThreads]);
+    let cancelled = false;
+
+    const init = async () => {
+      setThreadsLoading(true);
+
+      const loadedAiThread = await loadAiThread();
+
+      try {
+        const { data } = await api.get("/chat/threads");
+        if (cancelled) return;
+
+        const items = (data.data ?? []) as ChatThread[];
+        setThreads(items);
+
+        const combined: UiChatThread[] = [
+          ...(loadedAiThread ? [loadedAiThread] : []),
+          ...items,
+        ];
+
+        setActiveThread((prev) => {
+          if (prev) {
+            const stillExists = combined.find((t) => t._id === prev._id);
+            if (stillExists) return stillExists;
+          }
+
+          return combined[0] ?? null;
+        });
+
+        initializedRef.current = true;
+      } catch (error) {
+        console.error("Failed to initialize chat page", error);
+      } finally {
+        if (!cancelled) setThreadsLoading(false);
+      }
+    };
+
+    void init();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [loadAiThread]);
 
   useEffect(() => {
     if (!activeThread?._id) {
@@ -133,11 +302,11 @@ export default function ChatPage() {
       return;
     }
 
-    loadMessages(activeThread._id, true);
+    void loadMessages(activeThread._id, true);
   }, [activeThread?._id, loadMessages]);
 
   useEffect(() => {
-    if (!activeThread?._id) return;
+    if (!activeThread?._id || activeThread._id === AI_THREAD_ID) return;
 
     setThreads((prev) =>
       prev.map((thread) =>
@@ -149,15 +318,20 @@ export default function ChatPage() {
   }, [activeThread?._id, messages.length, markThreadAsRead]);
 
   useEffect(() => {
-    const interval = window.setInterval(() => {
-      loadThreads(false);
-    }, 5000);
+    const onRefresh = () => {
+      void loadThreads(false);
+    };
 
-    return () => window.clearInterval(interval);
+    window.addEventListener("chat:threads:refresh", onRefresh);
+    return () => window.removeEventListener("chat:threads:refresh", onRefresh);
   }, [loadThreads]);
 
   useEffect(() => {
     if (!activeThread?._id) return;
+
+    if (activeThread._id === AI_THREAD_ID) {
+      return;
+    }
 
     const interval = window.setInterval(async () => {
       try {
@@ -166,7 +340,6 @@ export default function ChatPage() {
         );
 
         const nextMessages = (data.data ?? []) as ChatMessage[];
-
         let hasNewForeignMessage = false;
 
         setMessages((prev) => {
@@ -200,19 +373,11 @@ export default function ChatPage() {
 
         if (hasNewForeignMessage) {
           await markThreadAsRead(activeThread._id);
-
-          setThreads((prev) =>
-            prev.map((thread) =>
-              thread._id === activeThread._id
-                ? { ...thread, unreadCount: 0 }
-                : thread
-            )
-          );
         }
       } catch (error) {
         console.error("Failed to refresh active chat messages", error);
       }
-    }, 2000);
+    }, 2500);
 
     return () => window.clearInterval(interval);
   }, [activeThread?._id, currentUserId, markThreadAsRead]);
@@ -220,7 +385,14 @@ export default function ChatPage() {
   useEffect(() => {
     if (!token) return;
 
-    const socket = getSocket(token);
+    let socket: any;
+
+    try {
+      socket = getSocket(token);
+    } catch (error) {
+      console.error("Failed to create socket", error);
+      return;
+    }
 
     const onConnectError = (err: any) => {
       console.error("socket connect error", err);
@@ -233,10 +405,11 @@ export default function ChatPage() {
       const message = payload?.data;
       if (!message) return;
 
-      const isActiveThread = activeThreadIdRef.current === message.threadId;
+      const isActiveRegularThread =
+        activeThreadIdRef.current === message.threadId;
       const isOwnMessage = message.senderId === currentUserId;
 
-      if (isActiveThread) {
+      if (isActiveRegularThread) {
         setMessages((prev) => {
           const exists = prev.some((m) => m._id === message._id);
           if (exists) return prev;
@@ -268,7 +441,7 @@ export default function ChatPage() {
             lastMessageAt: message.createdAt,
             relationStatus: nextRelationStatus,
             unreadCount:
-              isActiveThread || isOwnMessage
+              isActiveRegularThread || isOwnMessage
                 ? 0
                 : (thread.unreadCount ?? 0) + 1,
           };
@@ -286,18 +459,94 @@ export default function ChatPage() {
   }, [token, currentUserId, markThreadAsRead]);
 
   useEffect(() => {
-    if (!token || !activeThread?._id) return;
+    if (!token || !activeThread?._id || activeThread._id === AI_THREAD_ID)
+      return;
 
-    const socket = getSocket(token);
-    socket.emit("chat:join", { threadId: activeThread._id });
+    let socket: any;
+
+    try {
+      socket = getSocket(token);
+      socket.emit("chat:join", { threadId: activeThread._id });
+    } catch (error) {
+      console.error("Failed to join socket room", error);
+      return;
+    }
 
     return () => {
-      socket.emit("chat:leave", { threadId: activeThread._id });
+      try {
+        socket.emit("chat:leave", { threadId: activeThread._id });
+      } catch {
+        // ignore
+      }
     };
   }, [token, activeThread?._id]);
 
+  const refreshAfterMutation = async () => {
+    await loadThreads(false);
+
+    if (activeThreadIdRef.current) {
+      await loadMessages(activeThreadIdRef.current, false);
+    }
+  };
+
   const handleSendMessage = async (text: string) => {
     if (!activeThread?._id) return;
+
+    if (activeThread._id === AI_THREAD_ID) {
+      try {
+        setSending(true);
+
+        const optimisticUserMessage: ChatMessage = {
+          _id: `temp-user-${Date.now()}`,
+          threadId: AI_THREAD_ID,
+          senderId: currentUserId,
+          receiverId: AI_THREAD_ID,
+          text,
+          createdAt: new Date().toISOString(),
+          meta: { type: "user" },
+        };
+
+        setMessages((prev) => [...prev, optimisticUserMessage]);
+
+        const { data } = await api.post("/ai/thread/messages", { text });
+        const result = data?.data as
+          | {
+              userMessage?: ChatMessage;
+              assistantMessage?: ChatMessage;
+            }
+          | undefined;
+
+        if (result?.userMessage || result?.assistantMessage) {
+          setMessages((prev) => {
+            const withoutTemp = prev.filter(
+              (m) => m._id !== optimisticUserMessage._id
+            );
+
+            const next = [...withoutTemp];
+            if (result.userMessage) next.push(result.userMessage);
+            if (result.assistantMessage) next.push(result.assistantMessage);
+            return next;
+          });
+
+          await loadAiThread();
+        } else {
+          await loadAiThread();
+          setMessages((prev) =>
+            prev.filter((m) => m._id !== optimisticUserMessage._id)
+          );
+        }
+      } catch (error) {
+        console.error("Failed to send AI message", error);
+        setMessages((prev) =>
+          prev.filter((m) => !String(m._id).startsWith("temp-user-"))
+        );
+      } finally {
+        setSending(false);
+      }
+
+      return;
+    }
+
     if (messagesMeta?.relationStatus !== "active") return;
 
     try {
@@ -338,15 +587,12 @@ export default function ChatPage() {
   };
 
   const handleAcceptRequest = async () => {
-    if (!activeThread?._id) return;
+    if (!activeThread?._id || activeThread._id === AI_THREAD_ID) return;
 
     try {
       setResolvingRequest(true);
-
       await api.post(`/chat/threads/${activeThread._id}/accept`);
-
-      await loadThreads(false);
-      await loadMessages(activeThread._id, false);
+      await refreshAfterMutation();
       notifyGlobalChatRefresh();
     } catch (error) {
       console.error("Failed to accept request", error);
@@ -356,15 +602,12 @@ export default function ChatPage() {
   };
 
   const handleDeclineRequest = async () => {
-    if (!activeThread?._id) return;
+    if (!activeThread?._id || activeThread._id === AI_THREAD_ID) return;
 
     try {
       setResolvingRequest(true);
-
       await api.post(`/chat/threads/${activeThread._id}/decline`);
-
-      await loadThreads(false);
-      await loadMessages(activeThread._id, false);
+      await refreshAfterMutation();
       notifyGlobalChatRefresh();
     } catch (error) {
       console.error("Failed to decline request", error);
@@ -374,23 +617,34 @@ export default function ChatPage() {
   };
 
   const canCoachRespondToRequest =
+    !isAiThread &&
     currentUserRole === "coach" &&
     messagesMeta?.relationStatus === "pending" &&
     messages.some(
       (m) => m.meta?.type === "connect_request" && m.meta?.actionRequired
     );
 
-  const canSendNormalMessages = messagesMeta?.relationStatus === "active";
+  const canSendNormalMessages =
+    isAiThread || messagesMeta?.relationStatus === "active";
 
-  const pendingInfoText =
-    messagesMeta?.relationStatus === "pending"
-      ? currentUserRole === "coach"
-        ? "Offene Verbindungsanfrage. Du kannst sie annehmen oder ablehnen."
-        : "Deine Verbindungsanfrage ist gesendet. Du bekommst die Antwort hier im Chat."
-      : null;
+  const pendingInfoText = isAiThread
+    ? "AthletiQ Bot analysiert deine Stats, Trends und mögliche Verbesserungen."
+    : messagesMeta?.relationStatus === "pending"
+    ? currentUserRole === "coach"
+      ? "Offene Verbindungsanfrage. Du kannst sie annehmen oder ablehnen."
+      : "Deine Verbindungsanfrage ist gesendet. Du bekommst die Antwort hier im Chat."
+    : null;
+
+  const composerPlaceholder = isAiThread
+    ? "Frag nach Motivation, Fortschritt oder Verbesserungen..."
+    : canSendNormalMessages
+    ? "Nachricht schreiben..."
+    : messagesMeta?.relationStatus === "pending"
+    ? "Normale Nachrichten sind erst nach Annahme möglich"
+    : "Dieser Chat ist nicht mehr aktiv";
 
   const handleBack = async () => {
-    if (activeThread?._id) {
+    if (activeThread?._id && activeThread._id !== AI_THREAD_ID) {
       await markThreadAsRead(activeThread._id);
     }
 
@@ -445,7 +699,7 @@ export default function ChatPage() {
           <div>
             <span className="text-white font-medium">AthletiQ Chat</span>
             <p className="text-slate-400 text-xs mt-0.5">
-              Coach ↔ Athlete Kommunikation & Notifications
+              Coach ↔ Athlete Kommunikation & intelligenter Bot
             </p>
           </div>
         </div>
@@ -464,7 +718,7 @@ export default function ChatPage() {
               <ChatSidebar
                 threads={sortedThreads}
                 activeThreadId={activeThread?._id ?? null}
-                onSelect={setActiveThread}
+                onSelect={(thread) => setActiveThread(thread as UiChatThread)}
                 isLoading={threadsLoading}
               />
             </div>
@@ -477,33 +731,73 @@ export default function ChatPage() {
           >
             <div className="h-full min-h-0 flex flex-col">
               {activeThread && pendingInfoText && (
-                <div className="mb-4 rounded-2xl border border-[#FFD300]/20 bg-[#FFD300]/8 px-4 py-3">
+                <div
+                  className={`mb-4 rounded-2xl px-4 py-3 border ${
+                    isAiThread
+                      ? "border-cyan-400/20 bg-cyan-400/5"
+                      : "border-[#FFD300]/20 bg-[#FFD300]/8"
+                  }`}
+                >
                   <div className="flex items-start gap-3">
-                    <div className="mt-0.5 w-8 h-8 rounded-xl bg-[#FFD300]/12 border border-[#FFD300]/20 flex items-center justify-center shrink-0">
-                      <svg
-                        className="w-4 h-4 text-[#FFD300]"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={1.7}
-                          d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                        />
-                      </svg>
+                    <div
+                      className={`mt-0.5 w-8 h-8 rounded-xl flex items-center justify-center shrink-0 border ${
+                        isAiThread
+                          ? "bg-cyan-400/10 border-cyan-400/20"
+                          : "bg-[#FFD300]/12 border-[#FFD300]/20"
+                      }`}
+                    >
+                      {isAiThread ? (
+                        <span className="text-cyan-300 text-sm">✦</span>
+                      ) : (
+                        <svg
+                          className="w-4 h-4 text-[#FFD300]"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={1.7}
+                            d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                          />
+                        </svg>
+                      )}
                     </div>
 
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm text-[#ffe88a] font-medium">
-                        Verbindungsstatus
+                      <p
+                        className={`text-sm font-medium ${
+                          isAiThread ? "text-cyan-300" : "text-[#ffe88a]"
+                        }`}
+                      >
+                        {isAiThread ? "AthletiQ Bot" : "Verbindungsstatus"}
                       </p>
                       <p className="text-sm text-slate-300 mt-1">
                         {pendingInfoText}
                       </p>
                     </div>
                   </div>
+
+                  {isAiThread && (
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      {[
+                        "Wie lief mein heutiger Tag?",
+                        "Wo sehe ich Fortschritt?",
+                        "Was sollte ich verbessern?",
+                        "Motiviere mich kurz",
+                      ].map((prompt) => (
+                        <button
+                          key={prompt}
+                          onClick={() => void handleSendMessage(prompt)}
+                          disabled={sending}
+                          className="px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-xs text-slate-300 hover:text-white hover:border-white/20 transition-all disabled:opacity-50"
+                        >
+                          {prompt}
+                        </button>
+                      ))}
+                    </div>
+                  )}
 
                   {canCoachRespondToRequest && (
                     <div className="mt-4 flex flex-wrap gap-3">
@@ -538,19 +832,16 @@ export default function ChatPage() {
                   isLoading={messagesLoading}
                   isSending={sending}
                   onBack={async () => {
-                    if (activeThread?._id) {
+                    if (
+                      activeThread?._id &&
+                      activeThread._id !== AI_THREAD_ID
+                    ) {
                       await markThreadAsRead(activeThread._id);
                     }
                     setActiveThread(null);
                   }}
                   disableComposer={!canSendNormalMessages}
-                  composerPlaceholder={
-                    canSendNormalMessages
-                      ? "Nachricht schreiben..."
-                      : messagesMeta?.relationStatus === "pending"
-                      ? "Normale Nachrichten sind erst nach Annahme möglich"
-                      : "Dieser Chat ist nicht mehr aktiv"
-                  }
+                  composerPlaceholder={composerPlaceholder}
                 />
               </div>
             </div>
