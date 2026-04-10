@@ -11,13 +11,20 @@ import statsRoutes from "./routes/stats";
 import chatRoutes from "./routes/chat";
 import { initSocket } from "./socket";
 import aiRoutes from "./routes/ai";
+import { ensureDemoAccount } from "./lib/demo/ensureDemoAccount";
 
 dotenv.config();
 
 const app = express();
 const PORT = Number(process.env.PORT) || 5000;
 
-app.use(cors({ origin: "http://localhost:5173", credentials: true }));
+app.use(
+  cors({
+    origin: "http://localhost:5173",
+    credentials: true,
+  })
+);
+
 app.use(express.json());
 
 app.use("/api/auth", authRoutes);
@@ -42,8 +49,22 @@ const io = new SocketIOServer(server, {
 
 initSocket(io);
 
-connectDB().then(() => {
-  server.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on http://localhost:${PORT}`);
-  });
-});
+async function bootstrap() {
+  try {
+    await connectDB();
+
+    await ensureDemoAccount();
+    // oder immer frisch:
+    // await ensureDemoAccount({ forceReseed: true });
+
+    server.listen(PORT, "0.0.0.0", () => {
+      console.log(`Server running on http://localhost:${PORT}`);
+      console.log("Demo account ready: dirk@demo.com / password123");
+    });
+  } catch (error) {
+    console.error("Failed to bootstrap server:", error);
+    process.exit(1);
+  }
+}
+
+bootstrap();
