@@ -1,4 +1,10 @@
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import {
+  BrowserRouter,
+  Routes,
+  Route,
+  Navigate,
+  useLocation,
+} from "react-router-dom";
 import { AuthProvider, useAuth } from "./hooks/useAuth";
 import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
@@ -16,36 +22,74 @@ const ProtectedRoute = ({
   role?: "athlete" | "coach";
 }) => {
   const { user, isLoading } = useAuth();
-  if (isLoading)
+  const location = useLocation();
+
+  if (isLoading) {
     return (
       <div className="flex items-center justify-center h-screen text-slate-400">
         Loading…
       </div>
     );
+  }
+
   if (!user) return <Navigate to="/login" replace />;
+
   if (role && user.role !== role) return <Navigate to="/" replace />;
+
+  const isAthlete = user.role === "athlete";
+  const needsOnboarding = isAthlete && !user.onboardingCompleted;
+  const isOnboardingRoute = location.pathname === "/onboarding";
+
+  if (needsOnboarding && !isOnboardingRoute) {
+    return <Navigate to="/onboarding" replace />;
+  }
+
+  if (isAthlete && user.onboardingCompleted && isOnboardingRoute) {
+    return <Navigate to="/athlete" replace />;
+  }
+
   return <>{children}</>;
 };
 
 const RoleRedirect = () => {
   const { user, isLoading } = useAuth();
+
   if (isLoading) return null;
   if (!user) return <Navigate to="/login" replace />;
+
+  if (user.role === "coach") {
+    return <Navigate to="/coach" replace />;
+  }
+
   return (
-    <Navigate to={user.role === "coach" ? "/coach" : "/athlete"} replace />
+    <Navigate
+      to={user.onboardingCompleted ? "/athlete" : "/onboarding"}
+      replace
+    />
   );
 };
+
+function AppChrome() {
+  const location = useLocation();
+
+  const hideChatNotifier =
+    location.pathname === "/login" ||
+    location.pathname === "/register" ||
+    location.pathname === "/onboarding";
+
+  return <>{!hideChatNotifier && <GlobalChatNotifier />}</>;
+}
 
 export default function App() {
   return (
     <AuthProvider>
       <BrowserRouter>
-        <GlobalChatNotifier />
-
+        <AppChrome />
         <Routes>
           <Route path="/" element={<RoleRedirect />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
+
           <Route
             path="/onboarding"
             element={
@@ -54,6 +98,7 @@ export default function App() {
               </ProtectedRoute>
             }
           />
+
           <Route
             path="/athlete"
             element={
@@ -62,6 +107,7 @@ export default function App() {
               </ProtectedRoute>
             }
           />
+
           <Route
             path="/coach"
             element={
@@ -70,6 +116,7 @@ export default function App() {
               </ProtectedRoute>
             }
           />
+
           <Route
             path="/chat"
             element={

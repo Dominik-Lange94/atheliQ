@@ -1,31 +1,59 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../lib/api";
-import type { CreateStatCardInput, CreateStatEntryInput } from "@shared/schemas";
+import type {
+  CreateStatCardInput,
+  CreateStatEntryInput,
+} from "@shared/schemas";
+
+type StatCardItem = {
+  _id: string;
+  athleteId: string;
+  type: string;
+  label: string;
+  unit: string;
+  color?: string | null;
+  chartType?: "line" | "bar" | "mixed" | string;
+  visible?: boolean;
+  order: number;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+type LatestStatItem = {
+  card: StatCardItem;
+  latest: any | null;
+};
+
+type DayStatItem = {
+  card: StatCardItem;
+  entry: any | null;
+};
+
+type ReorderPayloadItem = {
+  id: string;
+  order: number;
+};
 
 // ─── Cards ────────────────────────────────────────────────────────────────────
 
 export const useCards = () =>
-  useQuery({
+  useQuery<StatCardItem[]>({
     queryKey: ["cards"],
     queryFn: async () => {
       const { data } = await api.get("/athlete/cards");
-      return data.data;
+      return (data.data ?? []) as StatCardItem[];
     },
     staleTime: 0,
   });
 
 export const useAddCard = () => {
   const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (input: CreateStatCardInput) => api.post("/athlete/cards", input),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["cards"] }),
-  });
-};
 
-export const useRemoveCard = () => {
-  const qc = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => api.delete(`/athlete/cards/${id}`),
+    mutationFn: async (input: CreateStatCardInput) => {
+      const { data } = await api.post("/athlete/cards", input);
+      return data.data as StatCardItem;
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["cards"] });
       qc.invalidateQueries({ queryKey: ["latest"] });
@@ -34,27 +62,135 @@ export const useRemoveCard = () => {
   });
 };
 
+export const useRemoveCard = () => {
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (id: string) => {
+      await api.delete(`/athlete/cards/${id}`);
+      return id;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["cards"] });
+      qc.invalidateQueries({ queryKey: ["latest"] });
+      qc.invalidateQueries({ queryKey: ["day"] });
+      qc.invalidateQueries({ queryKey: ["entries"] });
+    },
+  });
+};
+
+export const useEditCard = () => {
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      id,
+      label,
+      color,
+      chartType,
+      visible,
+      unit,
+    }: {
+      id: string;
+      label?: string;
+      color?: string;
+      chartType?: string;
+      visible?: boolean;
+      unit?: string;
+    }) => {
+      const { data } = await api.patch(`/athlete/cards/${id}`, {
+        label,
+        color,
+        chartType,
+        visible,
+        unit,
+      });
+      return data.data as StatCardItem;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["cards"] });
+      qc.invalidateQueries({ queryKey: ["latest"] });
+    },
+  });
+};
+
+// ─── Reorder Cards ────────────────────────────────────────────────────────────
+
+export const useReorderCards = () => {
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (cards: StatCardItem[]) => {
+      const payload: { order: ReorderPayloadItem[] } = {
+        order: cards.map((card, index) => ({
+          id: card._id,
+          order: index,
+        })),
+      };
+
+      await api.patch("/athlete/cards/reorder", payload);
+      return cards.map((card, index) => ({
+        ...card,
+        order: index,
+      }));
+    },
+
+    onMutate: async (nextCards: StatCardItem[]) => {
+      await qc.cancelQueries({ queryKey: ["cards"] });
+
+      const previousCards = qc.getQueryData<StatCardItem[]>(["cards"]);
+
+      const optimisticCards = nextCards.map((card, index) => ({
+        ...card,
+        order: index,
+      }));
+
+      qc.setQueryData<StatCardItem[]>(["cards"], optimisticCards);
+
+      return { previousCards };
+    },
+
+    onError: (error, _nextCards, context) => {
+      console.error("Failed to reorder cards", error);
+
+      if (context?.previousCards) {
+        qc.setQueryData(["cards"], context.previousCards);
+      }
+    },
+
+    onSuccess: (savedCards) => {
+      qc.setQueryData<StatCardItem[]>(["cards"], savedCards);
+    },
+
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: ["cards"] });
+    },
+  });
+};
+
 // ─── Latest values ────────────────────────────────────────────────────────────
 
 export const useLatestStats = () =>
-  useQuery({
+  useQuery<LatestStatItem[]>({
     queryKey: ["latest"],
     queryFn: async () => {
       const { data } = await api.get("/stats/latest");
-      return data.data as { card: any; latest: any }[];
+      return (data.data ?? []) as LatestStatItem[];
     },
+    staleTime: 0,
   });
 
 // ─── Day stats ────────────────────────────────────────────────────────────────
 
 export const useDayStats = (date: string) =>
-  useQuery({
+  useQuery<DayStatItem[]>({
     queryKey: ["day", date],
     queryFn: async () => {
       const { data } = await api.get(`/stats/day?date=${date}`);
-      return data.data as { card: any; entry: any }[];
+      return (data.data ?? []) as DayStatItem[];
     },
     staleTime: 0,
+    enabled: !!date,
   });
 
 // ─── Entries for chart ────────────────────────────────────────────────────────
@@ -63,15 +199,17 @@ export const useCardEntries = (
   cardId: string | null,
   opts?: { from?: string; to?: string }
 ) =>
-  useQuery({
+  useQuery<any[]>({
     queryKey: ["entries", cardId, opts?.from, opts?.to],
     queryFn: async () => {
       const params = new URLSearchParams();
+
       if (opts?.from) params.set("from", opts.from);
-      if (opts?.to)   params.set("to",   opts.to);
+      if (opts?.to) params.set("to", opts.to);
+
       const qs = params.toString() ? `?${params.toString()}` : "";
       const { data } = await api.get(`/stats/entries/${cardId}${qs}`);
-      return data.data;
+      return data.data ?? [];
     },
     enabled: !!cardId,
   });
@@ -80,8 +218,12 @@ export const useCardEntries = (
 
 export const useLogEntry = () => {
   const qc = useQueryClient();
+
   return useMutation({
-    mutationFn: (input: CreateStatEntryInput) => api.post("/stats/entries", input),
+    mutationFn: async (input: CreateStatEntryInput) => {
+      const { data } = await api.post("/stats/entries", input);
+      return data.data;
+    },
     onSuccess: (_data, vars) => {
       qc.invalidateQueries({ queryKey: ["entries", vars.cardId] });
       qc.invalidateQueries({ queryKey: ["latest"] });
@@ -94,13 +236,44 @@ export const useLogEntry = () => {
 
 export const useUpdateWeight = () => {
   const qc = useQueryClient();
+
   return useMutation({
-    mutationFn: ({ delta, date }: { delta: number; date?: string }) =>
-      api.patch("/athlete/weight", { delta, date }),
+    mutationFn: async ({ delta, date }: { delta: number; date?: string }) => {
+      const { data } = await api.patch("/athlete/weight", { delta, date });
+      return data.data;
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["latest"] });
       qc.invalidateQueries({ queryKey: ["day"] });
       qc.invalidateQueries({ queryKey: ["entries"] });
+      qc.invalidateQueries({ queryKey: ["profile"] });
+    },
+  });
+};
+
+// ─── Profile ──────────────────────────────────────────────────────────────────
+
+export const useAthleteProfile = () =>
+  useQuery({
+    queryKey: ["profile"],
+    queryFn: async () => {
+      const { data } = await api.get("/athlete/profile");
+      return data.data;
+    },
+    staleTime: 0,
+  });
+
+export const useUpdateAthleteProfile = () => {
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (payload: Record<string, unknown>) => {
+      const { data } = await api.patch("/athlete/profile", payload);
+      return data.data;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["profile"] });
+      qc.invalidateQueries({ queryKey: ["latest"] });
     },
   });
 };
@@ -120,7 +293,6 @@ export const useCoachAthletes = (userId?: string) =>
     refetchOnWindowFocus: true,
   });
 
-// Athlete stats with optional date range
 export const useAthleteStats = (
   athleteId: string | null,
   opts?: { from?: string; to?: string }
@@ -129,12 +301,17 @@ export const useAthleteStats = (
     queryKey: ["athlete-stats", athleteId, opts?.from, opts?.to],
     queryFn: async () => {
       const params = new URLSearchParams();
+
       if (opts?.from) params.set("from", opts.from);
-      if (opts?.to)   params.set("to",   opts.to);
+      if (opts?.to) params.set("to", opts.to);
+
       const qs = params.toString() ? `?${params.toString()}` : "";
       const { data } = await api.get(`/coach/athletes/${athleteId}/stats${qs}`);
-      // Return both stats data and activity flag
-      return { stats: data.data, isActive: data.isActive ?? null };
+
+      return {
+        stats: data.data,
+        isActive: data.isActive ?? null,
+      };
     },
     enabled: !!athleteId,
     staleTime: 0,
@@ -142,16 +319,19 @@ export const useAthleteStats = (
     refetchOnWindowFocus: true,
   });
 
-// Activity status for all athletes in a date range
 export const useAthletesActivity = (opts: { from?: string; to?: string }) =>
   useQuery({
     queryKey: ["athletes-activity", opts.from, opts.to],
     queryFn: async () => {
       const params = new URLSearchParams();
+
       if (opts.from) params.set("from", opts.from);
-      if (opts.to)   params.set("to",   opts.to);
-      const { data } = await api.get(`/coach/athletes/activity?${params.toString()}`);
-      // Returns [{athleteId, isActive}]
+      if (opts.to) params.set("to", opts.to);
+
+      const { data } = await api.get(
+        `/coach/athletes/activity?${params.toString()}`
+      );
+
       return data.data as { athleteId: string; isActive: boolean }[];
     },
     enabled: !!(opts.from || opts.to),
@@ -169,10 +349,23 @@ export const useMyCoaches = () =>
 
 export const useUpdatePermissions = () => {
   const qc = useQueryClient();
+
   return useMutation({
-    mutationFn: ({ coachId, allowedMetrics }: { coachId: string; allowedMetrics: string[] }) =>
-      api.patch(`/coach/permissions/${coachId}`, { allowedMetrics }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["my-coaches"] }),
+    mutationFn: async ({
+      coachId,
+      allowedMetrics,
+    }: {
+      coachId: string;
+      allowedMetrics: string[];
+    }) => {
+      const { data } = await api.patch(`/coach/permissions/${coachId}`, {
+        allowedMetrics,
+      });
+      return data.data;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["my-coaches"] });
+    },
   });
 };
 
@@ -180,27 +373,22 @@ export const useUpdatePermissions = () => {
 
 export const useDeleteEntry = () => {
   const qc = useQueryClient();
+
   return useMutation({
-    mutationFn: ({ entryId, cardId }: { entryId: string; cardId: string }) =>
-      api.delete(`/stats/entries/${entryId}`),
+    mutationFn: async ({
+      entryId,
+      cardId,
+    }: {
+      entryId: string;
+      cardId: string;
+    }) => {
+      await api.delete(`/stats/entries/${entryId}`);
+      return { entryId, cardId };
+    },
     onSuccess: (_data, vars) => {
       qc.invalidateQueries({ queryKey: ["entries", vars.cardId] });
       qc.invalidateQueries({ queryKey: ["latest"] });
       qc.invalidateQueries({ queryKey: ["day"] });
-    },
-  });
-};
-
-// ─── Edit card ────────────────────────────────────────────────────────────────
-
-export const useEditCard = () => {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: ({ id, label, color, chartType }: { id: string; label?: string; color?: string; chartType?: string }) =>
-      api.patch(`/athlete/cards/${id}`, { label, color, chartType }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["cards"] });
-      qc.invalidateQueries({ queryKey: ["latest"] });
     },
   });
 };
