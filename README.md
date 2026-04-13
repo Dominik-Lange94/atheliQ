@@ -1,6 +1,28 @@
-# SPAQ
+<p align="center">
+  <img src="client/public/spaq-logo-darkmode.png" alt="SPAQ Logo" width="220" />
+</p>
 
-Modern fitness tracking platform with athlete and coach roles, onboarding-driven setup, real-time chat, metric sharing, and an AI-ready foundation for personalized insights.
+<h1 align="center">SPAQ</h1>
+
+<p align="center">
+  Modern fitness tracking platform with athlete and coach roles, onboarding-driven setup, real-time chat, metric sharing, and an AI-ready foundation.
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/Frontend-React_18-61DAFB?style=for-the-badge&logo=react" />
+  <img src="https://img.shields.io/badge/Backend-Node.js-339933?style=for-the-badge&logo=node.js" />
+  <img src="https://img.shields.io/badge/Database-MongoDB-47A248?style=for-the-badge&logo=mongodb" />
+  <img src="https://img.shields.io/badge/Language-TypeScript-3178C6?style=for-the-badge&logo=typescript" />
+  <img src="https://img.shields.io/badge/Realtime-Socket.io-010101?style=for-the-badge&logo=socket.io" />
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/status-active-success?style=flat" />
+  <img src="https://img.shields.io/badge/version-0.1.0-blue?style=flat" />
+  <img src="https://img.shields.io/badge/license-MIT-green?style=flat" />
+</p>
+
+---
 
 ## Overview
 
