@@ -97,7 +97,7 @@ async function generateWithGemini(
   };
 }
 
-export async function generateAthletiqText(
+export async function generateSPAQText(
   input: GenerateInput
 ): Promise<GenerateOutput> {
   const provider = getProvider();

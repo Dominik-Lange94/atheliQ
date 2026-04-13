@@ -9,7 +9,7 @@ type Options = {
 export function useDocumentChatTitle({
   senderName,
   enabled,
-  baseTitle = "AthletiQ",
+  baseTitle = "SPAQ",
 }: Options) {
   const intervalRef = useRef<number | null>(null);
   const originalTitleRef = useRef<string>(baseTitle);

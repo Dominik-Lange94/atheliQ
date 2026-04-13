@@ -19,7 +19,7 @@ interface Props {
   latest: { value: number; recordedAt: string; secondaryValue?: number } | null;
   selected: boolean;
   onToggleSelect: () => void;
-  selectedDate?: string; // current calendar date from dashboard
+  selectedDate?: string;
 }
 
 const COLOR_OPTIONS = [
@@ -90,7 +90,7 @@ const CHART_TYPES = [
     key: "line",
     label: "Linie",
     icon: (
-      <svg viewBox="0 0 40 24" fill="none" className="w-10 h-6">
+      <svg viewBox="0 0 40 24" fill="none" className="h-6 w-10">
         <polyline
           points="2,20 10,12 18,15 26,6 38,10"
           stroke="currentColor"
@@ -105,7 +105,7 @@ const CHART_TYPES = [
     key: "bar",
     label: "Balken",
     icon: (
-      <svg viewBox="0 0 40 24" fill="none" className="w-10 h-6">
+      <svg viewBox="0 0 40 24" fill="none" className="h-6 w-10">
         <rect
           x="3"
           y="10"
@@ -149,7 +149,7 @@ const CHART_TYPES = [
     key: "mixed",
     label: "Mix",
     icon: (
-      <svg viewBox="0 0 40 24" fill="none" className="w-10 h-6">
+      <svg viewBox="0 0 40 24" fill="none" className="h-6 w-10">
         <rect
           x="3"
           y="12"
@@ -210,13 +210,16 @@ const DEFAULT_COLORS: Record<string, string> = {
 function getColorClasses(key: string) {
   return COLOR_OPTIONS.find((o) => o.key === key) ?? COLOR_OPTIONS[9];
 }
+
 function getEmoji(label: string): string {
   const match = label.match(/^\p{Emoji}/u);
   return match ? match[0] : "📊";
 }
+
 function getCleanLabel(label: string): string {
   return label.replace(/^\p{Emoji}\s*/u, "");
 }
+
 function getDefaultEmoji(type: string): string {
   const map: Record<string, string> = {
     heartrate: "❤️",
@@ -227,6 +230,7 @@ function getDefaultEmoji(type: string): string {
   };
   return map[type] ?? "📊";
 }
+
 function getDisplayUnit(unit: string): string {
   if (!unit.startsWith("custom||")) return unit;
   const parts = unit.split("||").slice(1);
@@ -238,6 +242,7 @@ function getDisplayUnit(unit: string): string {
   if (u1) return u1;
   return p1[0]?.trim() || "—";
 }
+
 function getDisplayValue(
   value: number,
   unit: string,
@@ -303,10 +308,12 @@ export default function StatCard({
     const newLabel = isCustom
       ? `${emoji} ${editLabel.trim()}`
       : editLabel.trim();
+
     setLocalLabel(editLabel.trim());
     setLocalColor(editColor);
     setLocalChartType(editChartType);
     setShowEdit(false);
+
     editCard.mutate({
       id: card._id,
       label: newLabel,
@@ -318,6 +325,7 @@ export default function StatCard({
   const handleManualWeight = () => {
     const val = parseFloat(weightInput);
     if (isNaN(val)) return;
+
     logEntry.mutate(
       {
         cardId: card._id,
@@ -333,7 +341,6 @@ export default function StatCard({
     );
   };
 
-  // Weight +/- always uses the selected calendar date
   const handleDelta = (delta: number) => {
     updateWeight.mutate({ delta, date: selectedDate });
   };
@@ -355,15 +362,15 @@ export default function StatCard({
             e.stopPropagation();
             onToggleSelect();
           }}
-          className={`absolute top-3 right-16 w-5 h-5 rounded-full border transition-all ${
+          className={`absolute right-16 top-3 h-5 w-5 rounded-full border transition-all ${
             selected
-              ? "bg-[#FFD300] border-[#FFD300]"
-              : "border-white/20 hover:border-white/40"
+              ? "border-[#FFD300] bg-[#FFD300]"
+              : "border-subtle bg-surface/70 hover:border-strong"
           }`}
         >
           {selected && (
             <svg
-              className="w-3 h-3 text-[#0f0f13] mx-auto"
+              className="mx-auto h-3 w-3 text-[#0f0f13]"
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"
@@ -383,7 +390,7 @@ export default function StatCard({
             e.stopPropagation();
             openEdit();
           }}
-          className="absolute top-3 right-9 w-5 h-5 text-slate-500 hover:text-[#FFD300] opacity-0 group-hover:opacity-100 transition-all text-sm leading-none"
+          className="absolute right-9 top-3 text-sm leading-none text-muted opacity-0 transition-all group-hover:opacity-100 hover:text-[#FFD300]"
           title="Bearbeiten"
         >
           ✎
@@ -394,7 +401,7 @@ export default function StatCard({
             e.stopPropagation();
             setConfirmRemove(true);
           }}
-          className="absolute top-3 right-3 w-5 h-5 text-slate-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all"
+          className="absolute right-3 top-3 h-5 w-5 text-muted opacity-0 transition-all group-hover:opacity-100 hover:text-red-500 dark:hover:text-red-400"
           title="Entfernen"
         >
           ✕
@@ -402,11 +409,13 @@ export default function StatCard({
 
         <div className="flex items-start gap-3">
           <span className="text-2xl">{emoji}</span>
-          <div className="flex-1 min-w-0">
-            <p className="text-xs text-slate-400 uppercase tracking-wider truncate">
+
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-xs uppercase tracking-wider text-muted">
               {localLabel}
             </p>
-            <p className="text-2xl font-semibold text-white mt-0.5">
+
+            <p className="mt-0.5 text-2xl font-semibold text-primary">
               {latest?.value != null
                 ? getDisplayValue(
                     latest.value,
@@ -414,12 +423,13 @@ export default function StatCard({
                     latest.secondaryValue
                   )
                 : "—"}
-              <span className="text-sm font-normal text-slate-400 ml-1">
+              <span className="ml-1 text-sm font-normal text-muted">
                 {displayUnit}
               </span>
             </p>
+
             {latest?.recordedAt && (
-              <p className="text-xs text-slate-500 mt-1">
+              <p className="mt-1 text-xs text-muted">
                 {new Date(latest.recordedAt).toLocaleDateString("de-DE", {
                   day: "2-digit",
                   month: "short",
@@ -430,13 +440,15 @@ export default function StatCard({
         </div>
 
         {isCustom && (
-          <div className="mt-2 pt-2 border-t border-white/10">
-            <p className="text-xs text-[#FFD300]/70">Tippen zum Öffnen →</p>
+          <div className="mt-2 border-t border-subtle pt-2">
+            <p className="text-xs text-[#c99700] dark:text-[#FFD300]/70">
+              Tippen zum Öffnen →
+            </p>
           </div>
         )}
 
         {isWeight && (
-          <div className="mt-3 pt-3 border-t border-white/10 space-y-2">
+          <div className="mt-3 space-y-2 border-t border-subtle pt-3">
             <div className="flex items-center gap-2">
               <button
                 onClick={(e) => {
@@ -444,38 +456,39 @@ export default function StatCard({
                   handleDelta(-0.1);
                 }}
                 disabled={updateWeight.isPending}
-                className="flex-1 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-white font-medium transition-colors text-sm disabled:opacity-50"
+                className="flex-1 rounded-lg border border-subtle bg-surface px-0 py-1.5 text-sm font-medium text-primary transition-colors hover:border-strong hover:bg-surface-2 disabled:opacity-50"
               >
                 − 0.1
               </button>
+
               <button
                 onClick={(e) => {
                   e.stopPropagation();
                   handleDelta(0.1);
                 }}
                 disabled={updateWeight.isPending}
-                className="flex-1 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-white font-medium transition-colors text-sm disabled:opacity-50"
+                className="flex-1 rounded-lg border border-subtle bg-surface px-0 py-1.5 text-sm font-medium text-primary transition-colors hover:border-strong hover:bg-surface-2 disabled:opacity-50"
               >
                 + 0.1
               </button>
+
               <button
                 onClick={(e) => {
                   e.stopPropagation();
                   setShowWeightInput(!showWeightInput);
                 }}
-                className={`px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-all ${
+                className={`rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-all ${
                   showWeightInput
-                    ? "bg-[#FFD300] border-[#FFD300] text-[#0f0f13]"
-                    : "bg-white/5 border-white/10 text-slate-300 hover:border-white/20"
+                    ? "border-[#FFD300] bg-[#FFD300] text-[#0f0f13]"
+                    : "border-subtle bg-surface text-secondary hover:border-strong"
                 }`}
               >
                 ✏️
               </button>
             </div>
 
-            {/* Show which date the +/- applies to */}
             {selectedDate && (
-              <p className="text-[10px] text-slate-600 text-center">
+              <p className="text-center text-[10px] text-muted">
                 {selectedDate === new Date().toISOString().split("T")[0]
                   ? "Heute"
                   : new Date(selectedDate + "T12:00:00").toLocaleDateString(
@@ -493,19 +506,21 @@ export default function StatCard({
                   onChange={(e) => setWeightInput(e.target.value)}
                   placeholder={`${latest?.value ?? "70"} kg`}
                   step="0.1"
-                  className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-white text-sm focus:outline-none focus:border-[#FFD300]/50 placeholder-slate-600"
+                  className="w-full rounded-lg border border-subtle bg-surface px-3 py-1.5 text-sm text-primary placeholder:text-muted focus:border-[#FFD300]/50 focus:outline-none"
                 />
+
                 <div className="flex gap-2">
                   <input
                     type="date"
                     value={dateInput}
                     onChange={(e) => setDateInput(e.target.value)}
-                    className="flex-1 bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-white text-sm focus:outline-none focus:border-[#FFD300]/50"
+                    className="flex-1 rounded-lg border border-subtle bg-surface px-3 py-1.5 text-sm text-primary focus:border-[#FFD300]/50 focus:outline-none"
                   />
+
                   <button
                     onClick={handleManualWeight}
                     disabled={logEntry.isPending || !weightInput}
-                    className="px-3 py-1.5 bg-[#FFD300] hover:bg-[#e6be00] disabled:opacity-40 text-[#0f0f13] text-sm rounded-lg transition-colors font-medium"
+                    className="rounded-lg bg-[#FFD300] px-3 py-1.5 text-sm font-medium text-[#0f0f13] transition-colors hover:bg-[#e6be00] disabled:opacity-40"
                   >
                     {logEntry.isPending ? "…" : "OK"}
                   </button>
@@ -516,49 +531,51 @@ export default function StatCard({
         )}
       </div>
 
-      {/* Edit modal */}
       {showEdit && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-[#1a1a24] border border-white/10 rounded-2xl w-full max-w-sm p-6 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between mb-5">
-              <h3 className="text-white font-semibold">Karte bearbeiten</h3>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
+          <div className="max-h-[90vh] w-full max-w-sm overflow-y-auto rounded-2xl border border-subtle bg-surface p-6">
+            <div className="mb-5 flex items-center justify-between">
+              <h3 className="font-semibold text-primary">Karte bearbeiten</h3>
               <button
                 onClick={() => setShowEdit(false)}
-                className="text-slate-400 hover:text-white text-xl leading-none"
+                className="text-xl leading-none text-muted transition hover:text-primary"
               >
                 ✕
               </button>
             </div>
+
             <div className="mb-4">
-              <label className="block text-sm text-slate-300 mb-1.5">
+              <label className="mb-1.5 block text-sm text-secondary">
                 Titel
               </label>
               <input
                 value={editLabel}
                 onChange={(e) => setEditLabel(e.target.value)}
-                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-[#FFD300]/50 transition-all text-sm"
+                className="w-full rounded-xl border border-subtle bg-surface-2 px-4 py-2.5 text-sm text-primary focus:border-[#FFD300]/50 focus:outline-none transition-all"
               />
             </div>
+
             <div className="mb-4">
-              <label className="block text-sm text-slate-300 mb-2">Farbe</label>
-              <div className="grid grid-cols-5 gap-2 mb-3">
+              <label className="mb-2 block text-sm text-secondary">Farbe</label>
+              <div className="mb-3 grid grid-cols-5 gap-2">
                 {COLOR_OPTIONS.map((c) => (
                   <button
                     key={c.key}
                     onClick={() => setEditColor(c.key)}
-                    className={`flex items-center justify-center h-9 rounded-lg border transition-all ${
+                    className={`flex h-9 items-center justify-center rounded-lg border transition-all ${
                       editColor === c.key
-                        ? "border-white/40 bg-white/10"
-                        : "border-white/10 bg-white/3 hover:border-white/20"
+                        ? "border-strong bg-surface-3"
+                        : "border-subtle bg-surface-2 hover:border-strong"
                     }`}
                   >
-                    <span className={`w-4 h-4 rounded-full ${c.dot}`} />
+                    <span className={`h-4 w-4 rounded-full ${c.dot}`} />
                   </button>
                 ))}
               </div>
             </div>
+
             <div className="mb-5">
-              <label className="block text-sm text-slate-300 mb-2">
+              <label className="mb-2 block text-sm text-secondary">
                 Diagramm-Typ
               </label>
               <div className="grid grid-cols-3 gap-2">
@@ -566,10 +583,10 @@ export default function StatCard({
                   <button
                     key={ct.key}
                     onClick={() => setEditChartType(ct.key)}
-                    className={`flex flex-col items-center gap-1.5 py-3 px-2 rounded-xl border transition-all ${
+                    className={`flex flex-col items-center gap-1.5 rounded-xl border px-2 py-3 transition-all ${
                       editChartType === ct.key
                         ? "border-[#FFD300]/50 bg-[#FFD300]/10 text-[#FFD300]"
-                        : "border-white/10 bg-white/3 text-slate-400 hover:border-white/20 hover:text-white"
+                        : "border-subtle bg-surface-2 text-muted hover:border-strong hover:text-primary"
                     }`}
                   >
                     {ct.icon}
@@ -578,28 +595,30 @@ export default function StatCard({
                 ))}
               </div>
             </div>
+
             <div
-              className={`mb-5 p-3 rounded-xl border bg-gradient-to-br ${previewColor.from} ${previewColor.border} flex items-center gap-2`}
+              className={`mb-5 flex items-center gap-2 rounded-xl border bg-gradient-to-br p-3 ${previewColor.from} ${previewColor.border}`}
             >
               <span className="text-lg">{emoji}</span>
-              <span className="text-white text-sm font-medium">
+              <span className="text-sm font-medium text-primary">
                 {editLabel || localLabel}
               </span>
-              <span className="ml-auto text-xs text-slate-400">
+              <span className="ml-auto text-xs text-muted">
                 {CHART_TYPES.find((c) => c.key === editChartType)?.label}
               </span>
             </div>
+
             <div className="flex gap-3">
               <button
                 onClick={() => setShowEdit(false)}
-                className="flex-1 py-2.5 rounded-xl border border-white/10 text-slate-300 hover:text-white text-sm font-medium transition-colors"
+                className="flex-1 rounded-xl border border-subtle bg-surface-2 py-2.5 text-sm font-medium text-secondary transition-colors hover:border-strong hover:text-primary"
               >
                 Abbrechen
               </button>
               <button
                 onClick={handleSaveEdit}
                 disabled={editCard.isPending || !editLabel.trim()}
-                className="flex-1 py-2.5 rounded-xl bg-[#FFD300] hover:bg-[#e6be00] disabled:opacity-40 text-[#0f0f13] text-sm font-medium transition-colors"
+                className="flex-1 rounded-xl bg-[#FFD300] py-2.5 text-sm font-medium text-[#0f0f13] transition-colors hover:bg-[#e6be00] disabled:opacity-40"
               >
                 {editCard.isPending ? "…" : "Speichern"}
               </button>
@@ -608,30 +627,31 @@ export default function StatCard({
         </div>
       )}
 
-      {/* Confirm remove */}
       {confirmRemove && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-[#1a1a24] border border-white/10 rounded-2xl w-full max-w-sm p-6">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 rounded-xl bg-red-500/10 border border-red-500/20 flex items-center justify-center text-xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-2xl border border-subtle bg-surface p-6">
+            <div className="mb-4 flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-red-500/20 bg-red-500/10 text-xl">
                 🗑️
               </div>
               <div>
-                <h3 className="text-white font-semibold">Karte entfernen?</h3>
-                <p className="text-slate-400 text-xs mt-0.5">{localLabel}</p>
+                <h3 className="font-semibold text-primary">Karte entfernen?</h3>
+                <p className="mt-0.5 text-xs text-muted">{localLabel}</p>
               </div>
             </div>
-            <p className="text-slate-300 text-sm mb-5">
+
+            <p className="mb-5 text-sm text-secondary">
               Sind Sie sicher? Alle gespeicherten Daten dieser Karte werden{" "}
-              <span className="text-red-400 font-medium">
+              <span className="font-medium text-red-500 dark:text-red-400">
                 unwiderruflich gelöscht
               </span>{" "}
               und können nicht wiederhergestellt werden.
             </p>
+
             <div className="flex gap-3">
               <button
                 onClick={() => setConfirmRemove(false)}
-                className="flex-1 py-2.5 rounded-xl border border-white/10 text-slate-300 hover:text-white text-sm font-medium transition-colors"
+                className="flex-1 rounded-xl border border-subtle bg-surface-2 py-2.5 text-sm font-medium text-secondary transition-colors hover:border-strong hover:text-primary"
               >
                 Abbrechen
               </button>
@@ -641,7 +661,7 @@ export default function StatCard({
                   setConfirmRemove(false);
                 }}
                 disabled={removeCard.isPending}
-                className="flex-1 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white text-sm font-medium transition-colors"
+                className="flex-1 rounded-xl bg-red-600 py-2.5 text-sm font-medium text-white transition-colors hover:bg-red-500 disabled:opacity-50"
               >
                 {removeCard.isPending ? "Löschen…" : "Ja, löschen"}
               </button>

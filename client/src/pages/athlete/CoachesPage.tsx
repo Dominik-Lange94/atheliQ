@@ -30,23 +30,25 @@ function getStatusConfig(status?: "pending" | "active" | "revoked") {
     case "pending":
       return {
         label: "Anfrage offen",
-        className: "bg-[#FFD300]/10 text-[#ffe88a] border border-[#FFD300]/20",
+        className:
+          "border border-[#FFD300]/20 bg-[#FFD300]/10 text-[#c99700] dark:text-[#ffe88a]",
       };
     case "active":
       return {
         label: "Verbunden",
         className:
-          "bg-emerald-500/10 text-emerald-300 border border-emerald-500/20",
+          "border border-emerald-500/20 bg-emerald-500/10 text-emerald-600 dark:text-emerald-300",
       };
     case "revoked":
       return {
         label: "Beendet",
-        className: "bg-rose-500/10 text-rose-300 border border-rose-500/20",
+        className:
+          "border border-rose-500/20 bg-rose-500/10 text-rose-600 dark:text-rose-300",
       };
     default:
       return {
         label: "Unbekannt",
-        className: "bg-white/5 text-slate-300 border border-white/10",
+        className: "border border-subtle bg-surface-2 text-secondary",
       };
   }
 }
@@ -131,25 +133,27 @@ export default function CoachesPage({ onClose }: { onClose: () => void }) {
   };
 
   return (
-    <div className="fixed inset-0 bg-[#0f0f13] z-40 overflow-y-auto">
-      <div className="max-w-2xl mx-auto px-4 py-8">
-        <div className="flex items-center gap-4 mb-8">
+    <div className="fixed inset-0 z-40 overflow-y-auto bg-app">
+      <div className="mx-auto max-w-2xl px-4 py-8">
+        <div className="mb-8 flex items-center gap-4">
           <button
             onClick={onClose}
-            className="w-9 h-9 rounded-xl bg-white/5 border border-white/10 hover:border-white/20 flex items-center justify-center text-slate-400 hover:text-white transition-all"
+            className="flex h-9 w-9 items-center justify-center rounded-xl border border-subtle bg-surface text-muted transition-all hover:border-strong hover:text-primary"
           >
             ←
           </button>
           <div>
-            <h1 className="text-xl font-semibold text-white">Meine Coaches</h1>
-            <p className="text-slate-400 text-sm">
+            <h1 className="text-xl font-semibold text-primary">
+              Meine Coaches
+            </h1>
+            <p className="text-sm text-muted">
               Verwalte Anfragen, Verbindungen und sichtbare Metriken
             </p>
           </div>
         </div>
 
-        <div className="bg-white/3 border border-white/10 rounded-2xl p-5 mb-6">
-          <h2 className="text-white font-medium mb-4">Coach hinzufügen</h2>
+        <div className="mb-6 rounded-2xl border border-subtle bg-surface p-5">
+          <h2 className="mb-4 font-medium text-primary">Coach hinzufügen</h2>
 
           <div className="flex gap-2">
             <input
@@ -162,34 +166,36 @@ export default function CoachesPage({ onClose }: { onClose: () => void }) {
               onKeyDown={(e) => e.key === "Enter" && handleSearch()}
               placeholder="Email-Adresse des Coaches"
               type="email"
-              className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white placeholder-slate-500 focus:outline-none focus:border-[#FFD300]/50 transition-all text-sm"
+              className="flex-1 rounded-xl border border-subtle bg-surface-2 px-4 py-2.5 text-sm text-primary placeholder:text-muted focus:border-[#FFD300]/50 focus:outline-none transition-all"
             />
             <button
               onClick={handleSearch}
               disabled={!email.trim() || searchCoach.isPending}
-              className="px-4 py-2.5 bg-[#FFD300] hover:bg-[#e6be00] disabled:opacity-40 text-[#0f0f13] font-medium rounded-xl transition-colors text-sm"
+              className="rounded-xl bg-[#FFD300] px-4 py-2.5 text-sm font-medium text-[#0f0f13] transition-colors hover:bg-[#e6be00] disabled:opacity-40"
             >
               {searchCoach.isPending ? "…" : "Suchen"}
             </button>
           </div>
 
           {searchError && (
-            <p className="text-red-400 text-sm mt-2">{searchError}</p>
+            <p className="mt-2 text-sm text-red-500 dark:text-red-400">
+              {searchError}
+            </p>
           )}
 
           {foundCoach && (
-            <div className="mt-3 p-3 bg-white/5 border border-white/10 rounded-xl">
+            <div className="mt-3 rounded-xl border border-subtle bg-surface-2 p-3">
               <div className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-9 h-9 rounded-full bg-[#FFD300]/10 border border-[#FFD300]/20 flex items-center justify-center text-[#FFD300] font-semibold text-sm shrink-0">
+                <div className="flex min-w-0 items-center gap-3">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-[#FFD300]/20 bg-[#FFD300]/10 text-sm font-semibold text-[#FFD300]">
                     {foundCoach.name?.charAt(0).toUpperCase()}
                   </div>
 
                   <div className="min-w-0">
-                    <p className="text-white text-sm font-medium truncate">
+                    <p className="truncate text-sm font-medium text-primary">
                       {foundCoach.name}
                     </p>
-                    <p className="text-slate-400 text-xs truncate">
+                    <p className="truncate text-xs text-muted">
                       {foundCoach.email}
                     </p>
                   </div>
@@ -198,17 +204,17 @@ export default function CoachesPage({ onClose }: { onClose: () => void }) {
                 <button
                   onClick={handleConnect}
                   disabled={connectCoach.isPending}
-                  className="px-3 py-1.5 bg-[#FFD300] hover:bg-[#e6be00] disabled:opacity-40 text-[#0f0f13] text-xs font-medium rounded-lg transition-colors shrink-0"
+                  className="shrink-0 rounded-lg bg-[#FFD300] px-3 py-1.5 text-xs font-medium text-[#0f0f13] transition-colors hover:bg-[#e6be00] disabled:opacity-40"
                 >
                   {connectCoach.isPending ? "…" : "Anfrage senden"}
                 </button>
               </div>
 
               <div className="mt-3 rounded-xl border border-[#FFD300]/15 bg-[#FFD300]/6 px-3 py-2">
-                <p className="text-xs text-[#ffe88a] font-medium">
+                <p className="text-xs font-medium text-[#c99700] dark:text-[#ffe88a]">
                   Neuer Ablauf
                 </p>
-                <p className="text-xs text-slate-300 mt-1">
+                <p className="mt-1 text-xs text-secondary">
                   Der Coach erhält deine Anfrage im Chat und muss sie dort erst
                   akzeptieren. Die Antwort erscheint ebenfalls im Chat.
                 </p>
@@ -222,16 +228,16 @@ export default function CoachesPage({ onClose }: { onClose: () => void }) {
             [...Array(3)].map((_, i) => (
               <div
                 key={i}
-                className="h-24 bg-white/5 rounded-2xl animate-pulse"
+                className="h-24 animate-pulse rounded-2xl border border-subtle bg-surface"
               />
             ))
           ) : sortedRelations.length === 0 ? (
-            <div className="border border-dashed border-white/10 rounded-2xl p-10 text-center">
-              <p className="text-2xl mb-2">🏋️</p>
-              <p className="text-slate-300 text-sm">
+            <div className="rounded-2xl border border-dashed border-subtle bg-surface p-10 text-center">
+              <p className="mb-2 text-2xl">🏋️</p>
+              <p className="text-sm text-secondary">
                 Noch kein Coach hinzugefügt
               </p>
-              <p className="text-slate-500 text-xs mt-1">
+              <p className="mt-1 text-xs text-muted">
                 Suche oben nach der Email deines Coaches und sende eine Anfrage
               </p>
             </div>
@@ -248,62 +254,62 @@ export default function CoachesPage({ onClose }: { onClose: () => void }) {
               return (
                 <div
                   key={rel._id}
-                  className="bg-white/3 border border-white/10 rounded-2xl overflow-hidden"
+                  className="overflow-hidden rounded-2xl border border-subtle bg-surface"
                 >
                   <div className="flex items-center gap-3 p-4">
-                    <div className="w-10 h-10 rounded-full bg-[#FFD300]/10 border border-[#FFD300]/20 flex items-center justify-center text-[#FFD300] font-semibold shrink-0">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[#FFD300]/20 bg-[#FFD300]/10 font-semibold text-[#FFD300]">
                       {coach.name?.charAt(0).toUpperCase()}
                     </div>
 
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <p className="text-white font-medium text-sm truncate">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="truncate text-sm font-medium text-primary">
                           {coach.name}
                         </p>
                         <span
-                          className={`text-[10px] px-2 py-1 rounded-full font-medium ${status.className}`}
+                          className={`rounded-full px-2 py-1 text-[10px] font-medium ${status.className}`}
                         >
                           {status.label}
                         </span>
                       </div>
 
-                      <p className="text-slate-400 text-xs mt-1 truncate">
+                      <p className="mt-1 truncate text-xs text-muted">
                         {coach.email}
                       </p>
 
                       {isPending ? (
-                        <p className="text-[11px] text-slate-500 mt-1">
+                        <p className="mt-1 text-[11px] text-muted">
                           Anfrage gesendet. Antwort kommt im Chat.
                         </p>
                       ) : isActive ? (
-                        <p className="text-[11px] text-slate-500 mt-1">
+                        <p className="mt-1 text-[11px] text-muted">
                           Zugriff auf {allowed.length} von {cards.length}{" "}
                           Metriken
                         </p>
                       ) : (
-                        <p className="text-[11px] text-slate-500 mt-1">
+                        <p className="mt-1 text-[11px] text-muted">
                           Verbindung wurde beendet
                         </p>
                       )}
                     </div>
 
-                    <div className="flex items-center gap-2 shrink-0">
+                    <div className="flex shrink-0 items-center gap-2">
                       {isActive ? (
                         <>
-                          <span className="text-xs text-slate-400 bg-white/5 px-2 py-1 rounded-lg border border-white/10">
+                          <span className="rounded-lg border border-subtle bg-surface-2 px-2 py-1 text-xs text-secondary">
                             {allowed.length} / {cards.length}
                           </span>
                           <button
                             onClick={() =>
                               setExpandedCoachId(isExpanded ? null : coach._id)
                             }
-                            className="px-3 py-1.5 text-xs border border-white/10 text-slate-300 hover:text-white hover:border-white/20 rounded-lg transition-all"
+                            className="rounded-lg border border-subtle bg-surface-2 px-3 py-1.5 text-xs text-secondary transition-all hover:border-strong hover:text-primary"
                           >
                             {isExpanded ? "Einklappen" : "Berechtigungen"}
                           </button>
                         </>
                       ) : (
-                        <div className="text-[11px] text-slate-500 bg-white/5 px-2 py-1 rounded-lg border border-white/10">
+                        <div className="rounded-lg border border-subtle bg-surface-2 px-2 py-1 text-[11px] text-muted">
                           {isPending ? "Wartet auf Coach" : "Inaktiv"}
                         </div>
                       )}
@@ -311,12 +317,12 @@ export default function CoachesPage({ onClose }: { onClose: () => void }) {
                   </div>
 
                   {isPending && (
-                    <div className="border-t border-white/10 px-4 py-4">
+                    <div className="border-t border-subtle px-4 py-4">
                       <div className="rounded-xl border border-[#FFD300]/15 bg-[#FFD300]/6 px-3 py-3">
-                        <p className="text-xs text-[#ffe88a] font-medium">
+                        <p className="text-xs font-medium text-[#c99700] dark:text-[#ffe88a]">
                           Offene Anfrage
                         </p>
-                        <p className="text-sm text-slate-300 mt-1">
+                        <p className="mt-1 text-sm text-secondary">
                           Der Coach muss deine Anfrage erst im Chat annehmen,
                           bevor du Metriken freigeben kannst.
                         </p>
@@ -324,19 +330,19 @@ export default function CoachesPage({ onClose }: { onClose: () => void }) {
 
                       {confirmDisconnect === coach._id ? (
                         <div className="flex items-center gap-2 pt-4">
-                          <p className="text-sm text-slate-300 flex-1">
+                          <p className="flex-1 text-sm text-secondary">
                             Offene Anfrage wirklich zurückziehen?
                           </p>
                           <button
                             onClick={() => handleDisconnect(coach._id)}
                             disabled={disconnectCoach.isPending}
-                            className="px-3 py-1.5 bg-red-600 hover:bg-red-500 text-white text-xs font-medium rounded-lg transition-colors disabled:opacity-50"
+                            className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-red-500 disabled:opacity-50"
                           >
                             Ja, zurückziehen
                           </button>
                           <button
                             onClick={() => setConfirmDisconnect(null)}
-                            className="px-3 py-1.5 border border-white/10 text-slate-300 text-xs rounded-lg hover:border-white/20 transition-all"
+                            className="rounded-lg border border-subtle bg-surface-2 px-3 py-1.5 text-xs text-secondary transition-all hover:border-strong hover:text-primary"
                           >
                             Abbrechen
                           </button>
@@ -344,7 +350,7 @@ export default function CoachesPage({ onClose }: { onClose: () => void }) {
                       ) : (
                         <button
                           onClick={() => setConfirmDisconnect(coach._id)}
-                          className="mt-4 text-xs text-red-400/70 hover:text-red-400 transition-colors"
+                          className="mt-4 text-xs text-red-500/80 transition-colors hover:text-red-500 dark:text-red-400/70 dark:hover:text-red-400"
                         >
                           Anfrage zurückziehen
                         </button>
@@ -353,17 +359,17 @@ export default function CoachesPage({ onClose }: { onClose: () => void }) {
                   )}
 
                   {isActive && isExpanded && (
-                    <div className="border-t border-white/10 px-4 py-4">
-                      <p className="text-xs text-slate-400 mb-3 uppercase tracking-wider">
+                    <div className="border-t border-subtle px-4 py-4">
+                      <p className="mb-3 text-xs uppercase tracking-wider text-muted">
                         Sichtbare Metriken
                       </p>
 
                       {cards.length === 0 ? (
-                        <p className="text-slate-500 text-sm">
+                        <p className="text-sm text-muted">
                           Keine Karten vorhanden
                         </p>
                       ) : (
-                        <div className="grid grid-cols-2 gap-2 mb-4">
+                        <div className="mb-4 grid grid-cols-2 gap-2">
                           {cards.map((card: any) => {
                             const isAllowed = allowed.includes(card._id);
 
@@ -374,22 +380,22 @@ export default function CoachesPage({ onClose }: { onClose: () => void }) {
                                   toggleMetric(coach._id, card._id, allowed)
                                 }
                                 disabled={updatePermissions.isPending}
-                                className={`flex items-center gap-2.5 p-3 rounded-xl border text-left transition-all disabled:opacity-50 ${
+                                className={`flex items-center gap-2.5 rounded-xl border p-3 text-left transition-all disabled:opacity-50 ${
                                   isAllowed
-                                    ? "bg-[#FFD300]/10 border-[#FFD300]/30"
-                                    : "bg-white/3 border-white/10 hover:border-white/20"
+                                    ? "border-[#FFD300]/30 bg-[#FFD300]/10"
+                                    : "border-subtle bg-surface-2 hover:border-strong hover:bg-surface-3"
                                 }`}
                               >
                                 <div
-                                  className={`w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all ${
+                                  className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2 transition-all ${
                                     isAllowed
-                                      ? "bg-[#FFD300] border-[#FFD300]"
-                                      : "border-white/20"
+                                      ? "border-[#FFD300] bg-[#FFD300]"
+                                      : "border-subtle"
                                   }`}
                                 >
                                   {isAllowed && (
                                     <svg
-                                      className="w-2.5 h-2.5 text-[#0f0f13]"
+                                      className="h-2.5 w-2.5 text-[#0f0f13]"
                                       fill="none"
                                       viewBox="0 0 24 24"
                                       stroke="currentColor"
@@ -406,15 +412,15 @@ export default function CoachesPage({ onClose }: { onClose: () => void }) {
 
                                 <div className="min-w-0">
                                   <p
-                                    className={`text-xs font-medium truncate ${
+                                    className={`truncate text-xs font-medium ${
                                       isAllowed
-                                        ? "text-white"
-                                        : "text-slate-300"
+                                        ? "text-primary"
+                                        : "text-secondary"
                                     }`}
                                   >
                                     {getCleanLabel(card.label)}
                                   </p>
-                                  <p className="text-xs text-slate-500">
+                                  <p className="text-xs text-muted">
                                     {getDisplayUnit(card.unit)}
                                   </p>
                                 </div>
@@ -425,20 +431,20 @@ export default function CoachesPage({ onClose }: { onClose: () => void }) {
                       )}
 
                       {confirmDisconnect === coach._id ? (
-                        <div className="flex items-center gap-2 pt-2 border-t border-white/10">
-                          <p className="text-sm text-slate-300 flex-1">
+                        <div className="flex items-center gap-2 border-t border-subtle pt-2">
+                          <p className="flex-1 text-sm text-secondary">
                             Coach wirklich entfernen?
                           </p>
                           <button
                             onClick={() => handleDisconnect(coach._id)}
                             disabled={disconnectCoach.isPending}
-                            className="px-3 py-1.5 bg-red-600 hover:bg-red-500 text-white text-xs font-medium rounded-lg transition-colors disabled:opacity-50"
+                            className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-red-500 disabled:opacity-50"
                           >
                             Ja, entfernen
                           </button>
                           <button
                             onClick={() => setConfirmDisconnect(null)}
-                            className="px-3 py-1.5 border border-white/10 text-slate-300 text-xs rounded-lg hover:border-white/20 transition-all"
+                            className="rounded-lg border border-subtle bg-surface-2 px-3 py-1.5 text-xs text-secondary transition-all hover:border-strong hover:text-primary"
                           >
                             Abbrechen
                           </button>
@@ -446,7 +452,7 @@ export default function CoachesPage({ onClose }: { onClose: () => void }) {
                       ) : (
                         <button
                           onClick={() => setConfirmDisconnect(coach._id)}
-                          className="mt-2 text-xs text-red-400/70 hover:text-red-400 transition-colors"
+                          className="mt-2 text-xs text-red-500/80 transition-colors hover:text-red-500 dark:text-red-400/70 dark:hover:text-red-400"
                         >
                           Coach entfernen
                         </button>

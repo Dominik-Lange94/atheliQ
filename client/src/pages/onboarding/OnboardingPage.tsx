@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../../lib/api";
 import { useAuth } from "../../hooks/useAuth";
+import BrandLogo from "../../components/layout/BrandLogo";
 
 type PrimaryGoal =
   | "lose_fat"
@@ -585,15 +586,15 @@ function StepShell({
   children: React.ReactNode;
 }) {
   return (
-    <div className="bg-[#1a1a24] border border-white/10 rounded-3xl p-6 sm:p-8">
+    <div className="rounded-3xl border border-subtle bg-surface p-6 sm:p-8">
       <div className="mb-6">
         <p className="text-[11px] uppercase tracking-[0.18em] text-[#FFD300] font-semibold">
           {eyebrow}
         </p>
-        <h2 className="text-2xl sm:text-3xl font-semibold text-white mt-2">
+        <h2 className="mt-2 text-2xl font-semibold text-primary sm:text-3xl">
           {title}
         </h2>
-        <p className="text-slate-400 text-sm sm:text-base mt-2 max-w-2xl">
+        <p className="mt-2 max-w-2xl text-sm text-muted sm:text-base">
           {subtitle}
         </p>
       </div>
@@ -622,19 +623,19 @@ function OptionCard({
       className={`w-full text-left rounded-2xl border p-4 transition-all ${
         selected
           ? "border-[#FFD300]/50 bg-[#FFD300]/10"
-          : "border-white/10 bg-white/5 hover:bg-white/8 hover:border-white/20"
+          : "border-subtle bg-surface hover:border-strong hover:bg-surface-2"
       }`}
     >
       <div className="flex items-start gap-3">
         {icon ? (
-          <div className="w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-xl shrink-0">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-subtle bg-surface-2 text-xl">
             {icon}
           </div>
         ) : null}
         <div>
-          <p className="text-white font-medium">{title}</p>
+          <p className="font-medium text-primary">{title}</p>
           {subtitle ? (
-            <p className="text-slate-400 text-sm mt-1">{subtitle}</p>
+            <p className="mt-1 text-sm text-muted">{subtitle}</p>
           ) : null}
         </div>
       </div>
@@ -657,8 +658,8 @@ function ChoiceChip({
       onClick={onClick}
       className={`px-3 py-2 rounded-xl text-sm font-medium border transition-all ${
         active
-          ? "bg-[#FFD300] border-[#FFD300] text-[#0f0f13]"
-          : "bg-white/5 border-white/10 text-slate-300 hover:text-white hover:border-white/20"
+          ? "border-[#FFD300] bg-[#FFD300] text-[#0f0f13]"
+          : "border-subtle bg-surface text-secondary hover:border-strong hover:text-primary"
       }`}
     >
       {label}
@@ -682,15 +683,15 @@ function MultiSelectCard({
       className={`w-full text-left rounded-2xl border p-4 transition-all flex items-center justify-between gap-3 ${
         active
           ? "border-[#FFD300]/50 bg-[#FFD300]/10"
-          : "border-white/10 bg-white/5 hover:bg-white/8 hover:border-white/20"
+          : "border-subtle bg-surface hover:border-strong hover:bg-surface-2"
       }`}
     >
-      <span className="text-white">{label}</span>
+      <span className="text-primary">{label}</span>
       <div
         className={`w-5 h-5 rounded-md border flex items-center justify-center ${
           active
             ? "bg-[#FFD300] border-[#FFD300]"
-            : "border-white/20 bg-transparent"
+            : "border-subtle bg-transparent"
         }`}
       >
         {active ? (
@@ -1027,43 +1028,34 @@ export default function OnboardingPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#0f0f13]">
-      <header className="border-b border-white/10 px-6 py-4">
-        <div className="max-w-5xl mx-auto flex items-center justify-between gap-4">
+    <div className="min-h-screen bg-app">
+      <header className="border-b border-subtle px-6 py-4">
+        <div className="mx-auto flex max-w-5xl items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-[#FFD300]/10 border border-[#FFD300]/20 flex items-center justify-center">
-              <svg
-                className="w-5 h-5 text-[#FFD300]"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={1.5}
-                  d="M13 10V3L4 14h7v7l9-11h-7z"
-                />
-              </svg>
-            </div>
+            <BrandLogo imageClassName="h-9 w-auto" />
+
             <div>
-              <p className="text-white font-medium">AthletiQ</p>
-              <p className="text-slate-500 text-xs">Smart onboarding</p>
+              <p className="font-medium text-primary">SPAQ</p>
+              <p className="text-xs text-muted">Smart onboarding</p>
             </div>
           </div>
 
-          <div className="hidden sm:block text-right">
-            <p className="text-slate-400 text-xs">
-              Step {step + 1} of {totalSteps}
-            </p>
-            <p className="text-white text-sm font-medium">{stepTitle(step)}</p>
+          <div className="flex items-center gap-4">
+            <div className="hidden text-right sm:block">
+              <p className="text-xs text-muted">
+                Step {step + 1} of {totalSteps}
+              </p>
+              <p className="text-sm font-medium text-primary">
+                {stepTitle(step)}
+              </p>
+            </div>
           </div>
         </div>
       </header>
 
       <main className="max-w-5xl mx-auto px-4 sm:px-6 py-8">
         <div className="mb-6">
-          <div className="h-2 rounded-full bg-white/5 overflow-hidden border border-white/10">
+          <div className="h-2 overflow-hidden rounded-full border border-subtle bg-surface">
             <div
               className="h-full bg-[#FFD300] transition-all duration-300"
               style={{ width: `${progress}%` }}
@@ -1124,7 +1116,7 @@ export default function OnboardingPage() {
             subtitle="Optional. Hilfreich, wenn du auf ein klares Datum hinarbeitest."
           >
             {data.reason !== "event" ? (
-              <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
+              <div className="rounded-2xl border border-subtle bg-surface p-5">
                 <p className="text-white font-medium">Kein Event nötig</p>
                 <p className="text-slate-400 text-sm mt-2">
                   Du hast kein zielgebundenes Event gewählt. Diesen Schritt
@@ -1155,7 +1147,7 @@ export default function OnboardingPage() {
                         onChange={(e) => patch({ eventDay: e.target.value })}
                         type="number"
                         placeholder="12"
-                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-[#FFD300]/50"
+                        className="w-full rounded-xl border border-subtle bg-surface px-4 py-3 text-primary placeholder:text-muted focus:outline-none focus:border-[#FFD300]/50"
                       />
                     </div>
                     <div>
@@ -1167,7 +1159,7 @@ export default function OnboardingPage() {
                         onChange={(e) => patch({ eventMonth: e.target.value })}
                         type="number"
                         placeholder="08"
-                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-[#FFD300]/50"
+                        className="w-full rounded-xl border border-subtle bg-surface px-4 py-3 text-primary placeholder:text-muted focus:outline-none focus:border-[#FFD300]/50"
                       />
                     </div>
                     <div>
@@ -1179,7 +1171,7 @@ export default function OnboardingPage() {
                         onChange={(e) => patch({ eventYear: e.target.value })}
                         type="number"
                         placeholder="2026"
-                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-[#FFD300]/50"
+                        className="w-full rounded-xl border border-subtle bg-surface px-4 py-3 text-primary placeholder:text-muted focus:outline-none focus:border-[#FFD300]/50"
                       />
                     </div>
                   </div>
@@ -1210,7 +1202,7 @@ export default function OnboardingPage() {
                         }
                         placeholder="78"
                         type="number"
-                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-[#FFD300]/50"
+                        className="w-full rounded-xl border border-subtle bg-surface px-4 py-3 text-primary placeholder:text-muted focus:outline-none focus:border-[#FFD300]/50"
                       />
                       <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 text-sm">
                         kg
@@ -1231,7 +1223,7 @@ export default function OnboardingPage() {
                         }
                         placeholder="72"
                         type="number"
-                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-[#FFD300]/50"
+                        className="w-full rounded-xl border border-subtle bg-surface px-4 py-3 text-primary placeholder:text-muted focus:outline-none focus:border-[#FFD300]/50"
                       />
                       <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 text-sm">
                         kg
@@ -1250,7 +1242,7 @@ export default function OnboardingPage() {
                       onChange={(e) => patch({ heightCm: e.target.value })}
                       placeholder="180"
                       type="number"
-                      className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-[#FFD300]/50"
+                      className="w-full rounded-xl border border-subtle bg-surface px-4 py-3 text-primary placeholder:text-muted focus:outline-none focus:border-[#FFD300]/50"
                     />
                     <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 text-sm">
                       cm
@@ -1268,21 +1260,21 @@ export default function OnboardingPage() {
                       onChange={(e) => patch({ birthDay: e.target.value })}
                       type="number"
                       placeholder="Tag"
-                      className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-[#FFD300]/50"
+                      className="w-full rounded-xl border border-subtle bg-surface px-4 py-3 text-primary placeholder:text-muted focus:outline-none focus:border-[#FFD300]/50"
                     />
                     <input
                       value={data.birthMonth}
                       onChange={(e) => patch({ birthMonth: e.target.value })}
                       type="number"
                       placeholder="Monat"
-                      className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-[#FFD300]/50"
+                      className="w-full rounded-xl border border-subtle bg-surface px-4 py-3 text-primary placeholder:text-muted focus:outline-none focus:border-[#FFD300]/50"
                     />
                     <input
                       value={data.birthYear}
                       onChange={(e) => patch({ birthYear: e.target.value })}
                       type="number"
                       placeholder="Jahr"
-                      className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-[#FFD300]/50"
+                      className="w-full rounded-xl border border-subtle bg-surface px-4 py-3 text-primary placeholder:text-muted focus:outline-none focus:border-[#FFD300]/50"
                     />
                   </div>
                 </div>
@@ -1315,7 +1307,7 @@ export default function OnboardingPage() {
 
                 <InfoCard
                   title="Daten automatisch statt manuell tracken"
-                  text="Wenn du Werte aus Smartwatch, Google Fit, Health Connect oder unserer Mobile App übernehmen willst, kannst du das später verbinden. So bekommt auch AthletiQ regelmäßigere und genauere Daten."
+                  text="Wenn du Werte aus Smartwatch, Google Fit, Health Connect oder unserer Mobile App übernehmen willst, kannst du das später verbinden. So bekommt auch SPAQ regelmäßigere und genauere Daten."
                 />
               </div>
 
@@ -1351,7 +1343,7 @@ export default function OnboardingPage() {
           <StepShell
             eyebrow="Aktivität"
             title="Wie sieht dein Alltag aktuell aus?"
-            subtitle="So versteht AthletiQ deinen echten Startpunkt und kann realistischer planen."
+            subtitle="So versteht SPAQ deinen echten Startpunkt und kann realistischer planen."
           >
             <div className="space-y-7">
               <div>
@@ -1553,7 +1545,7 @@ export default function OnboardingPage() {
         {step === 8 && (
           <StepShell
             eyebrow="Recovery & KI"
-            title="Wie soll AthletiQ mit dir arbeiten?"
+            title="Wie soll SPAQ mit dir arbeiten?"
             subtitle="So werden Ton, Empfehlungen und AI-Antworten passender."
           >
             <div className="space-y-7">
@@ -1630,7 +1622,7 @@ export default function OnboardingPage() {
 
               <div>
                 <label className="block text-sm text-slate-300 mb-2">
-                  Noch etwas, das AthletiQ oder ein Coach wissen sollte?
+                  Noch etwas, das SPAQ oder ein Coach wissen sollte?
                 </label>
                 <textarea
                   value={data.notes}
@@ -1698,12 +1690,12 @@ export default function OnboardingPage() {
               />
 
               <div className="grid lg:grid-cols-[1fr_0.9fr] gap-6">
-                <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
+                <div className="rounded-2xl border border-subtle bg-surface p-5">
                   <p className="text-white font-medium">
                     Was als Nächstes passiert
                   </p>
                   <p className="text-slate-400 text-sm mt-2">
-                    Nach dem Abschluss kann AthletiQ mit einem passenden Profil,
+                    Nach dem Abschluss kann SPAQ mit einem passenden Profil,
                     einem besseren AI-Kontext und einem sinnvollen Dashboard
                     starten.
                   </p>

@@ -10,8 +10,9 @@ import {
 } from "../../types/chat";
 import ChatSidebar from "../../components/chat/ChatSidebar";
 import ChatWindow from "../../components/chat/ChatWindow";
+import BrandLogo from "../../components/layout/BrandLogo";
 
-const AI_THREAD_ID = "atheliq-bot";
+const AI_THREAD_ID = "SPAQ-bot";
 
 type UiChatThread = ChatThread & {
   isAssistantThread?: boolean;
@@ -51,7 +52,7 @@ function buildAiThread(data?: AiThreadResponse | null): UiChatThread | null {
     unreadCount: data.thread.unreadCount ?? 0,
     otherUser: {
       _id: AI_THREAD_ID,
-      name: data.thread.title || "AthletiQ Bot",
+      name: data.thread.title || "SPAQ Bot",
       email: "Lokaler KI-Assistent",
       role: "coach",
     },
@@ -179,9 +180,7 @@ export default function ChatPage() {
 
           if (combined.length === 0) return null;
 
-          if (!prev) {
-            return combined[0];
-          }
+          if (!prev) return combined[0];
 
           const stillExists = combined.find((t) => t._id === prev._id);
           return stillExists ?? combined[0];
@@ -327,11 +326,7 @@ export default function ChatPage() {
   }, [loadThreads]);
 
   useEffect(() => {
-    if (!activeThread?._id) return;
-
-    if (activeThread._id === AI_THREAD_ID) {
-      return;
-    }
+    if (!activeThread?._id || activeThread._id === AI_THREAD_ID) return;
 
     const interval = window.setInterval(async () => {
       try {
@@ -628,7 +623,7 @@ export default function ChatPage() {
     isAiThread || messagesMeta?.relationStatus === "active";
 
   const pendingInfoText = isAiThread
-    ? "AthletiQ Bot analysiert deine Stats, Trends und mögliche Verbesserungen."
+    ? "SPAQ Bot analysiert deine Stats, Trends und mögliche Verbesserungen."
     : messagesMeta?.relationStatus === "pending"
     ? currentUserRole === "coach"
       ? "Offene Verbindungsanfrage. Du kannst sie annehmen oder ablehnen."
@@ -657,16 +652,16 @@ export default function ChatPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#0f0f13] flex flex-col">
-      <header className="shrink-0 border-b border-white/10 px-6 py-4 flex items-center justify-between">
+    <div className="min-h-screen flex flex-col bg-app">
+      <header className="flex shrink-0 items-center justify-between border-b border-subtle px-6 py-4">
         <div className="flex items-center gap-3">
           <button
             onClick={handleBack}
-            className="w-10 h-10 rounded-xl bg-white/5 border border-white/10 hover:border-white/20 hover:bg-white/10 flex items-center justify-center text-slate-300 hover:text-white transition-all"
+            className="flex h-10 w-10 items-center justify-center rounded-xl border border-subtle bg-surface text-secondary transition-all hover:border-strong hover:bg-surface-2 hover:text-primary"
             title="Zurück"
           >
             <svg
-              className="w-5 h-5"
+              className="h-5 w-5"
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"
@@ -680,39 +675,22 @@ export default function ChatPage() {
             </svg>
           </button>
 
-          <div className="w-8 h-8 rounded-xl bg-[#FFD300]/10 border border-[#FFD300]/20 flex items-center justify-center">
-            <svg
-              className="w-4 h-4 text-[#FFD300]"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={1.5}
-                d="M13 10V3L4 14h7v7l9-11h-7z"
-              />
-            </svg>
-          </div>
-
-          <div>
-            <span className="text-white font-medium">AthletiQ Chat</span>
-            <p className="text-slate-400 text-xs mt-0.5">
-              Coach ↔ Athlete Kommunikation & intelligenter Bot
-            </p>
-          </div>
+          <BrandLogo imageClassName="h-8 w-auto" />
         </div>
 
-        <div className="text-sm text-slate-400">{user?.name}</div>
+        <div className="flex items-center gap-3">
+          <span className="hidden text-sm text-muted sm:block">
+            {user?.name}
+          </span>
+        </div>
       </header>
 
-      <main className="flex-1 min-h-0 max-w-7xl w-full mx-auto px-4 sm:px-6 py-4 sm:py-6">
-        <div className="h-full min-h-0 flex flex-col lg:flex-row gap-5 lg:h-[calc(100vh-120px)]">
+      <main className="mx-auto flex min-h-0 w-full max-w-7xl flex-1 px-4 py-4 sm:px-6 sm:py-6">
+        <div className="flex h-full min-h-0 w-full flex-col gap-5 lg:h-[calc(100vh-120px)] lg:flex-row">
           <div
             className={`${
               activeThread ? "hidden lg:block" : "block"
-            } w-full lg:w-[320px] lg:shrink-0 min-h-0`}
+            } min-h-0 w-full lg:w-[320px] lg:shrink-0`}
           >
             <div className="h-full min-h-0">
               <ChatSidebar
@@ -727,12 +705,12 @@ export default function ChatPage() {
           <div
             className={`${
               activeThread ? "block" : "hidden lg:block"
-            } flex-1 min-h-0`}
+            } min-h-0 flex-1`}
           >
-            <div className="h-full min-h-0 flex flex-col">
+            <div className="flex h-full min-h-0 flex-col">
               {activeThread && pendingInfoText && (
                 <div
-                  className={`mb-4 rounded-2xl px-4 py-3 border ${
+                  className={`mb-4 rounded-2xl border px-4 py-3 ${
                     isAiThread
                       ? "border-cyan-400/20 bg-cyan-400/5"
                       : "border-[#FFD300]/20 bg-[#FFD300]/8"
@@ -740,17 +718,19 @@ export default function ChatPage() {
                 >
                   <div className="flex items-start gap-3">
                     <div
-                      className={`mt-0.5 w-8 h-8 rounded-xl flex items-center justify-center shrink-0 border ${
+                      className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border ${
                         isAiThread
-                          ? "bg-cyan-400/10 border-cyan-400/20"
-                          : "bg-[#FFD300]/12 border-[#FFD300]/20"
+                          ? "border-cyan-400/20 bg-cyan-400/10"
+                          : "border-[#FFD300]/20 bg-[#FFD300]/12"
                       }`}
                     >
                       {isAiThread ? (
-                        <span className="text-cyan-300 text-sm">✦</span>
+                        <span className="text-sm text-cyan-500 dark:text-cyan-300">
+                          ✦
+                        </span>
                       ) : (
                         <svg
-                          className="w-4 h-4 text-[#FFD300]"
+                          className="h-4 w-4 text-[#FFD300]"
                           fill="none"
                           viewBox="0 0 24 24"
                           stroke="currentColor"
@@ -765,15 +745,17 @@ export default function ChatPage() {
                       )}
                     </div>
 
-                    <div className="flex-1 min-w-0">
+                    <div className="min-w-0 flex-1">
                       <p
                         className={`text-sm font-medium ${
-                          isAiThread ? "text-cyan-300" : "text-[#ffe88a]"
+                          isAiThread
+                            ? "text-cyan-600 dark:text-cyan-300"
+                            : "text-[#c99700] dark:text-[#ffe88a]"
                         }`}
                       >
-                        {isAiThread ? "AthletiQ Bot" : "Verbindungsstatus"}
+                        {isAiThread ? "SPAQ Bot" : "Verbindungsstatus"}
                       </p>
-                      <p className="text-sm text-slate-300 mt-1">
+                      <p className="mt-1 text-sm text-secondary">
                         {pendingInfoText}
                       </p>
                     </div>
@@ -791,7 +773,7 @@ export default function ChatPage() {
                           key={prompt}
                           onClick={() => void handleSendMessage(prompt)}
                           disabled={sending}
-                          className="px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-xs text-slate-300 hover:text-white hover:border-white/20 transition-all disabled:opacity-50"
+                          className="rounded-xl border border-subtle bg-surface px-3 py-2 text-xs text-secondary transition-all hover:border-strong hover:text-primary disabled:opacity-50"
                         >
                           {prompt}
                         </button>
@@ -804,7 +786,7 @@ export default function ChatPage() {
                       <button
                         onClick={handleAcceptRequest}
                         disabled={resolvingRequest}
-                        className="px-4 py-2.5 rounded-xl bg-[#FFD300] text-black font-medium hover:brightness-105 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="rounded-xl bg-[#FFD300] px-4 py-2.5 font-medium text-black transition-all hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         {resolvingRequest
                           ? "Wird verarbeitet..."
@@ -814,7 +796,7 @@ export default function ChatPage() {
                       <button
                         onClick={handleDeclineRequest}
                         disabled={resolvingRequest}
-                        className="px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white hover:bg-white/10 hover:border-white/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="rounded-xl border border-subtle bg-surface px-4 py-2.5 text-primary transition-all hover:border-strong hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         Ablehnen
                       </button>
@@ -823,7 +805,7 @@ export default function ChatPage() {
                 </div>
               )}
 
-              <div className="flex-1 min-h-0">
+              <div className="min-h-0 flex-1">
                 <ChatWindow
                   thread={activeThread}
                   messages={messages}

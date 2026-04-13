@@ -6,6 +6,7 @@ import {
   useLocation,
 } from "react-router-dom";
 import { AuthProvider, useAuth } from "./hooks/useAuth";
+import { ThemeProvider } from "./hooks/useTheme";
 import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
 import AthleteDashboard from "./pages/athlete/AthleteDashboard";
@@ -13,6 +14,7 @@ import CoachDashboard from "./pages/coach/CoachDashboard";
 import OnboardingPage from "./pages/onboarding/OnboardingPage";
 import ChatPage from "./pages/chat/ChatPage";
 import GlobalChatNotifier from "./components/chat/GlobalChatNotifier";
+import AthleteProfileSettingsPage from "./pages/athlete/AthleteProfileSettingsPage";
 
 const ProtectedRoute = ({
   children,
@@ -26,14 +28,13 @@ const ProtectedRoute = ({
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-screen text-slate-400">
+      <div className="flex h-screen items-center justify-center text-muted">
         Loading…
       </div>
     );
   }
 
   if (!user) return <Navigate to="/login" replace />;
-
   if (role && user.role !== role) return <Navigate to="/" replace />;
 
   const isAthlete = user.role === "athlete";
@@ -57,9 +58,7 @@ const RoleRedirect = () => {
   if (isLoading) return null;
   if (!user) return <Navigate to="/login" replace />;
 
-  if (user.role === "coach") {
-    return <Navigate to="/coach" replace />;
-  }
+  if (user.role === "coach") return <Navigate to="/coach" replace />;
 
   return (
     <Navigate
@@ -82,51 +81,62 @@ function AppChrome() {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <BrowserRouter>
-        <AppChrome />
-        <Routes>
-          <Route path="/" element={<RoleRedirect />} />
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/register" element={<RegisterPage />} />
+    <ThemeProvider>
+      <AuthProvider>
+        <BrowserRouter>
+          <AppChrome />
+          <Routes>
+            <Route path="/" element={<RoleRedirect />} />
+            <Route path="/login" element={<LoginPage />} />
+            <Route path="/register" element={<RegisterPage />} />
 
-          <Route
-            path="/onboarding"
-            element={
-              <ProtectedRoute role="athlete">
-                <OnboardingPage />
-              </ProtectedRoute>
-            }
-          />
+            <Route
+              path="/onboarding"
+              element={
+                <ProtectedRoute role="athlete">
+                  <OnboardingPage />
+                </ProtectedRoute>
+              }
+            />
 
-          <Route
-            path="/athlete"
-            element={
-              <ProtectedRoute role="athlete">
-                <AthleteDashboard />
-              </ProtectedRoute>
-            }
-          />
+            <Route
+              path="/athlete"
+              element={
+                <ProtectedRoute role="athlete">
+                  <AthleteDashboard />
+                </ProtectedRoute>
+              }
+            />
 
-          <Route
-            path="/coach"
-            element={
-              <ProtectedRoute role="coach">
-                <CoachDashboard />
-              </ProtectedRoute>
-            }
-          />
+            <Route
+              path="/athlete/settings/profile"
+              element={
+                <ProtectedRoute role="athlete">
+                  <AthleteProfileSettingsPage />
+                </ProtectedRoute>
+              }
+            />
 
-          <Route
-            path="/chat"
-            element={
-              <ProtectedRoute>
-                <ChatPage />
-              </ProtectedRoute>
-            }
-          />
-        </Routes>
-      </BrowserRouter>
-    </AuthProvider>
+            <Route
+              path="/coach"
+              element={
+                <ProtectedRoute role="coach">
+                  <CoachDashboard />
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/chat"
+              element={
+                <ProtectedRoute>
+                  <ChatPage />
+                </ProtectedRoute>
+              }
+            />
+          </Routes>
+        </BrowserRouter>
+      </AuthProvider>
+    </ThemeProvider>
   );
 }

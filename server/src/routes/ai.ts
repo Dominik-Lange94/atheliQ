@@ -2,13 +2,13 @@ import { Router, Response } from "express";
 import { authenticate, requireRole, AuthRequest } from "../middleware/auth";
 import AiChatMessage from "../models/AiChatMessage";
 import { buildAthleteAiContext } from "../ai/buildAthleteContext";
-import { generateAthletiqText } from "../ai/provider";
+import { generateSPAQText } from "../ai/provider";
 
 const router = Router();
 router.use(authenticate, requireRole("athlete"));
 
 const SYSTEM_PROMPT = `
-Du bist AthletiQ Bot, ein intelligenter Fitness- und Fortschrittsassistent.
+Du bist SPAQ Bot, ein intelligenter Fitness- und Fortschrittsassistent.
 Du bist motivierend, ehrlich, konkret und freundlich.
 Du erfindest keine Daten.
 Wenn Daten fehlen, sagst du das offen.
@@ -36,9 +36,9 @@ router.get("/thread", async (req: AuthRequest, res: Response) => {
       success: true,
       data: {
         thread: {
-          _id: "atheliq-bot",
+          _id: "SPAQ-bot",
           type: "assistant",
-          title: "AthletiQ Bot",
+          title: "SPAQ Bot",
           lastMessage:
             messages[messages.length - 1]?.text ||
             "Frag mich nach Motivation, Trends oder Verbesserungen.",
@@ -47,9 +47,9 @@ router.get("/thread", async (req: AuthRequest, res: Response) => {
         },
         messages: messages.map((m) => ({
           _id: String(m._id),
-          threadId: "atheliq-bot",
-          senderId: m.role === "assistant" ? "atheliq-bot" : req.user!.userId,
-          receiverId: m.role === "assistant" ? req.user!.userId : "atheliq-bot",
+          threadId: "SPAQ-bot",
+          senderId: m.role === "assistant" ? "SPAQ-bot" : req.user!.userId,
+          receiverId: m.role === "assistant" ? req.user!.userId : "SPAQ-bot",
           text: m.text,
           createdAt: m.createdAt,
           readAt: m.createdAt,
@@ -94,7 +94,7 @@ Antwortformat:
 1 kurzer nächster Fokus
 `.trim();
 
-    const result = await generateAthletiqText({
+    const result = await generateSPAQText({
       system: SYSTEM_PROMPT,
       prompt,
       temperature: 0.8,
@@ -146,7 +146,7 @@ Regeln:
 - keine medizinischen Diagnosen
 `.trim();
 
-    const result = await generateAthletiqText({
+    const result = await generateSPAQText({
       system: SYSTEM_PROMPT,
       prompt,
       temperature: 0.4,
@@ -217,7 +217,7 @@ Aufgabe:
 - bei fehlenden Daten: offen sagen, was noch fehlt
 `.trim();
 
-    const result = await generateAthletiqText({
+    const result = await generateSPAQText({
       system: SYSTEM_PROMPT,
       prompt,
       temperature: 0.6,
@@ -239,9 +239,9 @@ Aufgabe:
       data: {
         userMessage: {
           _id: String(userMessage._id),
-          threadId: "atheliq-bot",
+          threadId: "SPAQ-bot",
           senderId: req.user!.userId,
-          receiverId: "atheliq-bot",
+          receiverId: "SPAQ-bot",
           text: userMessage.text,
           createdAt: userMessage.createdAt,
           readAt: userMessage.createdAt,
@@ -249,8 +249,8 @@ Aufgabe:
         },
         assistantMessage: {
           _id: String(assistantMessage._id),
-          threadId: "atheliq-bot",
-          senderId: "atheliq-bot",
+          threadId: "SPAQ-bot",
+          senderId: "SPAQ-bot",
           receiverId: req.user!.userId,
           text: assistantMessage.text,
           createdAt: assistantMessage.createdAt,

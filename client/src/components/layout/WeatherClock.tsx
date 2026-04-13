@@ -10,7 +10,7 @@ type WeatherState = {
 
 function getMoonPhase(date: Date) {
   const knownNewMoon = new Date("2000-01-06T18:14:00Z").getTime();
-  const lunarCycle = 29.53058867; // Tage
+  const lunarCycle = 29.53058867;
   const daysSince = (date.getTime() - knownNewMoon) / (1000 * 60 * 60 * 24);
   const phase = ((daysSince % lunarCycle) + lunarCycle) % lunarCycle;
   const normalized = phase / lunarCycle;
@@ -236,16 +236,16 @@ export default function WeatherClock() {
 
   return (
     <div className="flex items-center gap-2">
-      <div className="flex items-center gap-2 px-3 py-2 rounded-xl border border-white/10 bg-white/5">
+      <div className="flex items-center gap-2 rounded-xl border border-subtle bg-surface px-3 py-2">
         <span className="text-base leading-none">{meta.emoji}</span>
 
         <div className="leading-tight">
-          <div className="text-[11px] text-slate-400">
+          <div className="text-[11px] text-muted">
             {weather.loading
               ? "Wetter wird geladen…"
               : `${weather.city || "Standort"} · ${meta.label}`}
           </div>
-          <div className="text-sm text-white font-medium">
+          <div className="text-sm font-medium text-primary">
             {weather.temperature !== null
               ? `${Math.round(weather.temperature)}°C`
               : "—"}
@@ -253,9 +253,9 @@ export default function WeatherClock() {
         </div>
       </div>
 
-      <div className="px-3 py-2 rounded-xl border border-white/10 bg-white/5 leading-tight">
-        <div className="text-[11px] text-slate-400">{dateText}</div>
-        <div className="text-sm text-white font-medium">{timeText}</div>
+      <div className="rounded-xl border border-subtle bg-surface px-3 py-2 leading-tight">
+        <div className="text-[11px] text-muted">{dateText}</div>
+        <div className="text-sm font-medium text-primary">{timeText}</div>
       </div>
     </div>
   );

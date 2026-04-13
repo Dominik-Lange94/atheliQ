@@ -16,7 +16,7 @@ export default function GlobalChatNotifier() {
   useDocumentChatTitle({
     senderName: titleAlertName,
     enabled: titleAlertEnabled,
-    baseTitle: "AthletiQ",
+    baseTitle: "SPAQ",
   });
 
   useEffect(() => {
