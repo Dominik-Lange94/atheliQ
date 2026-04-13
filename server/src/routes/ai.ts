@@ -25,12 +25,18 @@ Wenn sinnvoll, gib klare nächste Schritte in 2-4 Punkten.
 
 router.get("/thread", async (req: AuthRequest, res: Response) => {
   try {
-    const messages = await AiChatMessage.find({
-      athleteId: req.user!.userId,
-    })
+    const athleteId = req.user!.userId;
+
+    const messages = await AiChatMessage.find({ athleteId })
       .sort({ createdAt: 1 })
       .limit(100)
       .lean();
+
+    const lastMessage = messages[messages.length - 1];
+
+    const unreadCount = messages.filter(
+      (m) => m.role === "assistant" && !m.readAt
+    ).length;
 
     res.json({
       success: true,
@@ -40,24 +46,25 @@ router.get("/thread", async (req: AuthRequest, res: Response) => {
           type: "assistant",
           title: "SPAQ Bot",
           lastMessage:
-            messages[messages.length - 1]?.text ||
+            lastMessage?.text ||
             "Frag mich nach Motivation, Trends oder Verbesserungen.",
-          lastMessageAt: messages[messages.length - 1]?.createdAt || new Date(),
-          unreadCount: 0,
+          lastMessageAt: lastMessage?.createdAt || new Date(),
+          unreadCount,
         },
         messages: messages.map((m) => ({
           _id: String(m._id),
           threadId: "SPAQ-bot",
-          senderId: m.role === "assistant" ? "SPAQ-bot" : req.user!.userId,
-          receiverId: m.role === "assistant" ? req.user!.userId : "SPAQ-bot",
+          senderId: m.role === "assistant" ? "SPAQ-bot" : athleteId,
+          receiverId: m.role === "assistant" ? athleteId : "SPAQ-bot",
           text: m.text,
           createdAt: m.createdAt,
-          readAt: m.createdAt,
+          readAt: m.readAt ?? null,
           meta: {
             type: m.role === "assistant" ? "assistant" : "user",
             provider: m.meta?.provider || "ollama",
             model: m.meta?.model || "",
             kind: m.meta?.kind || "chat",
+            isOnboardingWelcome: Boolean(m.meta?.isOnboardingWelcome),
           },
         })),
       },
@@ -68,12 +75,35 @@ router.get("/thread", async (req: AuthRequest, res: Response) => {
   }
 });
 
+router.post("/thread/read", async (req: AuthRequest, res: Response) => {
+  try {
+    const athleteId = req.user!.userId;
+
+    await AiChatMessage.updateMany(
+      {
+        athleteId,
+        role: "assistant",
+        readAt: null,
+      },
+      {
+        $set: { readAt: new Date() },
+      }
+    );
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error("POST /api/ai/thread/read error:", error);
+    res.status(500).json({ success: false, error: "Server error" });
+  }
+});
+
 router.get("/motivation", async (req: AuthRequest, res: Response) => {
   try {
+    const athleteId = req.user!.userId;
     const date =
       typeof req.query.date === "string" ? req.query.date : undefined;
 
-    const context = await buildAthleteAiContext(req.user!.userId, date);
+    const context = await buildAthleteAiContext(athleteId, date);
 
     const prompt = `
 Erstelle eine kurze, persönliche Motivation für den heutigen Athleten.
@@ -119,10 +149,11 @@ Antwortformat:
 
 router.get("/insights", async (req: AuthRequest, res: Response) => {
   try {
+    const athleteId = req.user!.userId;
     const date =
       typeof req.query.date === "string" ? req.query.date : undefined;
 
-    const context = await buildAthleteAiContext(req.user!.userId, date);
+    const context = await buildAthleteAiContext(athleteId, date);
 
     const prompt = `
 Analysiere den Athletenkontext datenbasiert.
@@ -171,6 +202,7 @@ Regeln:
 
 router.post("/thread/messages", async (req: AuthRequest, res: Response) => {
   try {
+    const athleteId = req.user!.userId;
     const text = typeof req.body?.text === "string" ? req.body.text.trim() : "";
     const date =
       typeof req.body?.selectedDate === "string"
@@ -183,9 +215,10 @@ router.post("/thread/messages", async (req: AuthRequest, res: Response) => {
     }
 
     const userMessage = await AiChatMessage.create({
-      athleteId: req.user!.userId,
+      athleteId,
       role: "user",
       text,
+      readAt: new Date(),
       meta: {
         provider: "client",
         model: "",
@@ -193,14 +226,12 @@ router.post("/thread/messages", async (req: AuthRequest, res: Response) => {
       },
     });
 
-    const history = await AiChatMessage.find({
-      athleteId: req.user!.userId,
-    })
+    const history = await AiChatMessage.find({ athleteId })
       .sort({ createdAt: 1 })
       .limit(12)
       .lean();
 
-    const context = await buildAthleteAiContext(req.user!.userId, date);
+    const context = await buildAthleteAiContext(athleteId, date);
 
     const prompt = `
 Athletenkontext:
@@ -224,9 +255,10 @@ Aufgabe:
     });
 
     const assistantMessage = await AiChatMessage.create({
-      athleteId: req.user!.userId,
+      athleteId,
       role: "assistant",
       text: result.text,
+      readAt: null,
       meta: {
         provider: result.provider,
         model: result.model,
@@ -240,21 +272,26 @@ Aufgabe:
         userMessage: {
           _id: String(userMessage._id),
           threadId: "SPAQ-bot",
-          senderId: req.user!.userId,
+          senderId: athleteId,
           receiverId: "SPAQ-bot",
           text: userMessage.text,
           createdAt: userMessage.createdAt,
-          readAt: userMessage.createdAt,
-          meta: { type: "user" },
+          readAt: userMessage.readAt,
+          meta: {
+            type: "user",
+            provider: "client",
+            model: "",
+            kind: "chat",
+          },
         },
         assistantMessage: {
           _id: String(assistantMessage._id),
           threadId: "SPAQ-bot",
           senderId: "SPAQ-bot",
-          receiverId: req.user!.userId,
+          receiverId: athleteId,
           text: assistantMessage.text,
           createdAt: assistantMessage.createdAt,
-          readAt: assistantMessage.createdAt,
+          readAt: assistantMessage.readAt,
           meta: {
             type: "assistant",
             provider: result.provider,
