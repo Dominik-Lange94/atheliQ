@@ -71,11 +71,13 @@ function stripEmoji(label: string): string {
 
 function getDisplayUnit(unit: string): string {
   if (!unit.startsWith("custom||")) return unit;
+
   const parts = unit.split("||").slice(1);
   const p1 = parts[0]?.split(":") ?? [];
   const p2 = parts[1]?.split(":") ?? [];
   const u1 = p1[1]?.trim() ?? "";
   const u2 = p2[1]?.trim() ?? "";
+
   if (u1 && u2) return `${u1} / ${u2}`;
   if (u1) return u1;
   return p1[0]?.trim() || "—";
@@ -161,10 +163,7 @@ export default function MainChart({
 
   const { data: entries, isLoading } = useCardEntries(
     displayCard?._id ?? null,
-    {
-      from,
-      to,
-    }
+    { from, to }
   );
 
   if (!selectedCards.length) {
@@ -185,9 +184,11 @@ export default function MainChart({
 
   const rawData = (entries ?? []).map((e: any) => {
     let value = e.value;
+
     if (isPaceCard && e.secondaryValue && e.value) {
       value = +(e.secondaryValue / e.value).toFixed(2);
     }
+
     if (isSpeedCard && e.secondaryValue && e.value) {
       value = +(e.value / (e.secondaryValue / 60)).toFixed(1);
     }
@@ -246,6 +247,7 @@ export default function MainChart({
   const goalMet = rawData.filter((d) =>
     weightGoal === "gain" ? d.value >= goalValue : d.value <= goalValue
   ).length;
+
   const goalPct =
     rawData.length > 0 ? Math.round((goalMet / rawData.length) * 100) : 0;
 
@@ -506,6 +508,7 @@ export default function MainChart({
               }}
               formatter={(v: any, name: any, props: any) => {
                 if (name === "trend") return [`${v} ${displayUnit}`, "Trend"];
+
                 return [
                   <span style={{ color: cardColor }}>
                     {props.payload._real} {displayUnit}

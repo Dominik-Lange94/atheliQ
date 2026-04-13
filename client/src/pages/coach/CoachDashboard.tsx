@@ -40,6 +40,7 @@ import BrandLogo from "../../components/layout/BrandLogo";
 function toDateStr(d: Date): string {
   return d.toISOString().split("T")[0];
 }
+
 const TODAY = toDateStr(new Date());
 
 function datumAnzeige(dateStr: string): string {

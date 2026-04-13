@@ -36,7 +36,7 @@ import MotivationBot from "../../components/ui/MotivationBot";
 import ThemeToggle from "../../components/layout/ThemeToggle";
 import BrandLogo from "../../components/layout/BrandLogo";
 
-const STORAGE_KEY = "fittrack_selected_cards";
+const STORAGE_KEY = "spaq_selected_cards";
 
 function toDateStr(d: Date): string {
   return d.toISOString().split("T")[0];
@@ -135,6 +135,7 @@ export default function AthleteDashboard() {
   const { data: cards = [], isLoading: cardsLoading } = useCards();
   const reorderCards = useReorderCards();
   const { data: latestStats = [] } = useLatestStats();
+  const { totalUnread } = useChatUnread();
 
   const [showAddModal, setShowAddModal] = useState(false);
   const [showCoaches, setShowCoaches] = useState(false);
@@ -153,8 +154,8 @@ export default function AthleteDashboard() {
 
   const [selectedCardIds, setSelectedCardIds] = useState<string[]>(() => {
     try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      return stored ? JSON.parse(stored) : [];
+      const s = localStorage.getItem(STORAGE_KEY);
+      return s ? JSON.parse(s) : [];
     } catch {
       return [];
     }
@@ -162,7 +163,6 @@ export default function AthleteDashboard() {
 
   useEffect(() => {
     if (arrangeMode || activeId) return;
-
     if (cards.length > 0) {
       setOrderedCards([...cards].sort((a: any, b: any) => a.order - b.order));
     } else {
@@ -188,13 +188,13 @@ export default function AthleteDashboard() {
     })
   );
 
-  const handleDragStart = (e: DragStartEvent) =>
+  const handleDragStart = (e: DragStartEvent) => {
     setActiveId(e.active.id as string);
+  };
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     setActiveId(null);
-
     if (!over || active.id === over.id) return;
 
     setOrderedCards((prev) => {
@@ -271,7 +271,6 @@ export default function AthleteDashboard() {
 
   const activeCard = orderedCards.find((c) => c._id === activeId);
   const hasAnyData = latestStats.some((s: any) => s.latest !== null);
-  const { totalUnread } = useChatUnread();
 
   if (showCoaches) {
     return <CoachesPage onClose={() => setShowCoaches(false)} />;
@@ -370,7 +369,7 @@ export default function AthleteDashboard() {
             onClick={logout}
             className="rounded-lg border border-subtle bg-surface px-3 py-1.5 text-xs text-secondary transition-colors hover:border-strong hover:text-primary"
           >
-            Sign out
+            Abmelden
           </button>
         </div>
       </header>
@@ -381,9 +380,7 @@ export default function AthleteDashboard() {
             <h1 className="text-2xl font-semibold text-primary">
               Hey, {user?.name?.split(" ")[0]} 👋
             </h1>
-            <p className="mt-1 text-sm text-muted">
-              Here's your performance overview
-            </p>
+            <p className="mt-1 text-sm text-muted">Deine Leistungsübersicht</p>
           </div>
 
           <div className="relative flex flex-shrink-0 items-center gap-2 rounded-xl border border-subtle bg-surface px-3 py-2">
@@ -509,7 +506,7 @@ export default function AthleteDashboard() {
         <div>
           <div className="mb-4 flex items-center justify-between gap-2">
             <div className="flex-shrink-0">
-              <h2 className="font-medium text-primary">Your metrics</h2>
+              <h2 className="font-medium text-primary">Deine Metriken</h2>
               <p className="mt-0.5 text-xs text-muted">
                 {dayLoading
                   ? "Lade…"
@@ -541,7 +538,7 @@ export default function AthleteDashboard() {
                     d="M4 6h16M4 12h16M4 18h16"
                   />
                 </svg>
-                {arrangeMode ? "Fertig" : "Arrange cards"}
+                {arrangeMode ? "Fertig" : "Karten anordnen"}
               </button>
 
               {!arrangeMode && (
@@ -562,7 +559,7 @@ export default function AthleteDashboard() {
                       d="M12 4v16m8-8H4"
                     />
                   </svg>
-                  Add card
+                  Karte hinzufügen
                 </button>
               )}
             </div>
@@ -580,7 +577,7 @@ export default function AthleteDashboard() {
           ) : orderedCards.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-subtle bg-surface p-12 text-center">
               <p className="text-sm text-muted">
-                No cards yet — add your first metric above
+                Noch keine Karten — füge deine erste Metrik hinzu
               </p>
             </div>
           ) : arrangeMode ? (
@@ -651,7 +648,7 @@ export default function AthleteDashboard() {
 
             <div className="flex flex-1 gap-1">
               {dayWindow.map(({ dateStr, day, weekday }) => {
-                const isSelected = dateStr === selectedDate;
+                const isSel = dateStr === selectedDate;
                 const isT = dateStr === TODAY;
                 const isFuture = dateStr > TODAY;
 
@@ -661,7 +658,7 @@ export default function AthleteDashboard() {
                     onClick={() => !isFuture && selectDate(dateStr)}
                     disabled={isFuture}
                     className={`flex flex-1 flex-col items-center gap-0.5 rounded-lg border py-1.5 transition-all ${
-                      isSelected
+                      isSel
                         ? "border-[#FFD300]/40 bg-[#FFD300]/12"
                         : isT
                         ? "border-subtle bg-surface-2 hover:border-strong"
@@ -672,7 +669,7 @@ export default function AthleteDashboard() {
                   >
                     <span
                       className={`text-[9px] font-medium uppercase tracking-wide ${
-                        isSelected
+                        isSel
                           ? "text-[#FFD300]"
                           : isT
                           ? "text-secondary"
@@ -684,7 +681,7 @@ export default function AthleteDashboard() {
 
                     <span
                       className={`text-xs font-semibold leading-none ${
-                        isSelected
+                        isSel
                           ? "text-[#FFD300]"
                           : isT
                           ? "text-primary"
@@ -694,11 +691,11 @@ export default function AthleteDashboard() {
                       {day}
                     </span>
 
-                    {isT && !isSelected && (
+                    {isT && !isSel && (
                       <span className="mt-0.5 h-1 w-1 rounded-full bg-[#FFD300]/50" />
                     )}
 
-                    {isSelected && (
+                    {isSel && (
                       <span className="mt-0.5 h-1 w-1 rounded-full bg-[#FFD300]" />
                     )}
                   </button>
