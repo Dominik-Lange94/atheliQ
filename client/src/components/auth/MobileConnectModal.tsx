@@ -51,7 +51,7 @@ export default function MobileConnectModal({ onClose }: Props) {
               Mobile App verbinden
             </h2>
             <p className="mt-1 text-sm text-muted">
-              QR mit der AthletiQ Health App scannen
+              QR mit der SPAQ Health App scannen
             </p>
           </div>
 

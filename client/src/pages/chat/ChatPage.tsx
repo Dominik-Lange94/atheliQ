@@ -10,6 +10,7 @@ import {
 } from "../../types/chat";
 import ChatSidebar from "../../components/chat/ChatSidebar";
 import ChatWindow from "../../components/chat/ChatWindow";
+import BrandLogo from "../../components/layout/BrandLogo";
 
 const AI_THREAD_ID = "SPAQ-bot";
 
@@ -51,7 +52,7 @@ function buildAiThread(data?: AiThreadResponse | null): UiChatThread | null {
     unreadCount: data.thread.unreadCount ?? 0,
     otherUser: {
       _id: AI_THREAD_ID,
-      name: data.thread.title || "AthletiQ Bot",
+      name: data.thread.title || "SPAQ Bot",
       email: "Lokaler KI-Assistent",
       role: "coach",
     },
@@ -622,7 +623,7 @@ export default function ChatPage() {
     isAiThread || messagesMeta?.relationStatus === "active";
 
   const pendingInfoText = isAiThread
-    ? "AthletiQ Bot analysiert deine Stats, Trends und mögliche Verbesserungen."
+    ? "SPAQ Bot analysiert deine Stats, Trends und mögliche Verbesserungen."
     : messagesMeta?.relationStatus === "pending"
     ? currentUserRole === "coach"
       ? "Offene Verbindungsanfrage. Du kannst sie annehmen oder ablehnen."
@@ -674,31 +675,14 @@ export default function ChatPage() {
             </svg>
           </button>
 
-          <div className="flex h-8 w-8 items-center justify-center rounded-xl border border-[#FFD300]/20 bg-[#FFD300]/10">
-            <svg
-              className="h-4 w-4 text-[#FFD300]"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={1.5}
-                d="M13 10V3L4 14h7v7l9-11h-7z"
-              />
-            </svg>
-          </div>
-
-          <div>
-            <span className="font-medium text-primary">AthletiQ Chat</span>
-            <p className="mt-0.5 text-xs text-muted">
-              Coach ↔ Athlete Kommunikation & intelligenter Bot
-            </p>
-          </div>
+          <BrandLogo imageClassName="h-8 w-auto" />
         </div>
 
-        <div className="text-sm text-muted">{user?.name}</div>
+        <div className="flex items-center gap-3">
+          <span className="hidden text-sm text-muted sm:block">
+            {user?.name}
+          </span>
+        </div>
       </header>
 
       <main className="mx-auto flex min-h-0 w-full max-w-7xl flex-1 px-4 py-4 sm:px-6 sm:py-6">
@@ -769,7 +753,7 @@ export default function ChatPage() {
                             : "text-[#c99700] dark:text-[#ffe88a]"
                         }`}
                       >
-                        {isAiThread ? "AthletiQ Bot" : "Verbindungsstatus"}
+                        {isAiThread ? "SPAQ Bot" : "Verbindungsstatus"}
                       </p>
                       <p className="mt-1 text-sm text-secondary">
                         {pendingInfoText}

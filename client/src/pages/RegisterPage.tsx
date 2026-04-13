@@ -5,6 +5,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { RegisterSchema, RegisterInput } from "../../../shared/schemas";
 import { useAuth } from "../hooks/useAuth";
 import { api } from "../lib/api";
+import BrandLogo from "../components/layout/BrandLogo";
 
 type RegisterResponseUser = {
   _id: string;
@@ -82,124 +83,122 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#0f0f13] flex items-center justify-center p-4">
+    <div className="flex min-h-screen items-center justify-center bg-app p-4">
       <div className="w-full max-w-md">
         <div className="mb-8 text-center">
-          <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-[#FFD300]/10 border border-[#FFD300]/20 mb-4">
-            <svg
-              className="w-6 h-6 text-[#FFD300]"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={1.5}
-                d="M13 10V3L4 14h7v7l9-11h-7z"
-              />
-            </svg>
+          <div className="mb-4 flex justify-center">
+            <BrandLogo imageClassName="h-12 w-auto" />
           </div>
 
-          <h1 className="text-2xl font-semibold text-white">Create account</h1>
-          <p className="text-slate-400 text-sm mt-1">
+          <h1 className="text-2xl font-semibold text-primary">
+            Create account
+          </h1>
+          <p className="mt-1 text-sm text-muted">
             Start tracking your performance
           </p>
         </div>
 
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-          <div className="grid grid-cols-2 gap-2 p-1 bg-white/5 rounded-xl border border-white/10">
-            {(["athlete", "coach"] as const).map((r) => (
-              <label
-                key={r}
-                className={`flex items-center justify-center gap-2 py-2.5 rounded-lg cursor-pointer transition-all text-sm font-medium ${
-                  role === r
-                    ? "bg-[#FFD300] text-[#0f0f13]"
-                    : "text-slate-400 hover:text-slate-200"
-                }`}
-              >
-                <input
-                  {...register("role")}
-                  type="radio"
-                  value={r}
-                  className="sr-only"
-                />
-                {r === "athlete" ? "🏃 Athlete" : "📋 Coach"}
-              </label>
-            ))}
-          </div>
-
-          <div>
-            <label className="block text-sm text-slate-300 mb-1.5">Name</label>
-            <input
-              {...register("name")}
-              autoComplete="name"
-              placeholder="Your name"
-              className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-[#FFD300]/50 transition-all"
-            />
-            {errors.name && (
-              <p className="text-red-400 text-xs mt-1">{errors.name.message}</p>
-            )}
-          </div>
-
-          <div>
-            <label className="block text-sm text-slate-300 mb-1.5">Email</label>
-            <input
-              {...register("email")}
-              type="email"
-              autoComplete="email"
-              placeholder="you@example.com"
-              className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-[#FFD300]/50 transition-all"
-            />
-            {errors.email && (
-              <p className="text-red-400 text-xs mt-1">
-                {errors.email.message}
-              </p>
-            )}
-          </div>
-
-          <div>
-            <label className="block text-sm text-slate-300 mb-1.5">
-              Password
-            </label>
-            <input
-              {...register("password")}
-              type="password"
-              autoComplete="new-password"
-              placeholder="Min. 8 characters"
-              className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-[#FFD300]/50 transition-all"
-            />
-            {errors.password && (
-              <p className="text-red-400 text-xs mt-1">
-                {errors.password.message}
-              </p>
-            )}
-          </div>
-
-          {serverError && (
-            <div className="bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3 text-red-400 text-sm">
-              {serverError}
+        <div className="rounded-3xl border border-subtle bg-surface p-6 shadow-[0_10px_40px_rgba(0,0,0,0.10)] dark:shadow-[0_10px_40px_rgba(0,0,0,0.35)]">
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+            <div className="grid grid-cols-2 gap-2 rounded-xl border border-subtle bg-surface-2 p-1">
+              {(["athlete", "coach"] as const).map((r) => (
+                <label
+                  key={r}
+                  className={`flex cursor-pointer items-center justify-center gap-2 rounded-lg py-2.5 text-sm font-medium transition-all ${
+                    role === r
+                      ? "bg-[#FFD300] text-[#0f0f13]"
+                      : "text-muted hover:text-primary"
+                  }`}
+                >
+                  <input
+                    {...register("role")}
+                    type="radio"
+                    value={r}
+                    className="sr-only"
+                  />
+                  {r === "athlete" ? "🏃 Athlete" : "📋 Coach"}
+                </label>
+              ))}
             </div>
-          )}
 
-          <button
-            type="submit"
-            disabled={isSubmitting}
-            className="w-full bg-[#FFD300] hover:bg-[#e6be00] disabled:opacity-50 text-[#0f0f13] font-medium py-3 rounded-xl transition-colors"
-          >
-            {isSubmitting ? "Creating account…" : "Create account"}
-          </button>
-        </form>
+            <div>
+              <label className="mb-1.5 block text-sm text-secondary">
+                Name
+              </label>
+              <input
+                {...register("name")}
+                autoComplete="name"
+                placeholder="Your name"
+                className="w-full rounded-xl border border-subtle bg-surface-2 px-4 py-3 text-primary placeholder:text-muted transition-all focus:border-[#FFD300]/50 focus:bg-surface-3 focus:outline-none"
+              />
+              {errors.name && (
+                <p className="mt-1 text-xs text-red-500 dark:text-red-400">
+                  {errors.name.message}
+                </p>
+              )}
+            </div>
 
-        <p className="text-center text-slate-400 text-sm mt-6">
-          Already have an account?{" "}
-          <Link
-            to="/login"
-            className="text-[#FFD300] hover:text-[#ffe066] transition-colors"
-          >
-            Sign in
-          </Link>
-        </p>
+            <div>
+              <label className="mb-1.5 block text-sm text-secondary">
+                Email
+              </label>
+              <input
+                {...register("email")}
+                type="email"
+                autoComplete="email"
+                placeholder="you@example.com"
+                className="w-full rounded-xl border border-subtle bg-surface-2 px-4 py-3 text-primary placeholder:text-muted transition-all focus:border-[#FFD300]/50 focus:bg-surface-3 focus:outline-none"
+              />
+              {errors.email && (
+                <p className="mt-1 text-xs text-red-500 dark:text-red-400">
+                  {errors.email.message}
+                </p>
+              )}
+            </div>
+
+            <div>
+              <label className="mb-1.5 block text-sm text-secondary">
+                Password
+              </label>
+              <input
+                {...register("password")}
+                type="password"
+                autoComplete="new-password"
+                placeholder="Min. 8 characters"
+                className="w-full rounded-xl border border-subtle bg-surface-2 px-4 py-3 text-primary placeholder:text-muted transition-all focus:border-[#FFD300]/50 focus:bg-surface-3 focus:outline-none"
+              />
+              {errors.password && (
+                <p className="mt-1 text-xs text-red-500 dark:text-red-400">
+                  {errors.password.message}
+                </p>
+              )}
+            </div>
+
+            {serverError && (
+              <div className="rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-600 dark:text-red-400">
+                {serverError}
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="w-full rounded-xl bg-[#FFD300] py-3 font-medium text-[#0f0f13] transition-colors hover:bg-[#e6be00] disabled:opacity-50"
+            >
+              {isSubmitting ? "Creating account…" : "Create account"}
+            </button>
+          </form>
+
+          <p className="mt-6 text-center text-sm text-muted">
+            Already have an account?{" "}
+            <Link
+              to="/login"
+              className="text-[#c99700] transition-colors hover:text-[#FFD300] dark:text-[#FFD300] dark:hover:text-[#ffe066]"
+            >
+              Sign in
+            </Link>
+          </p>
+        </div>
       </div>
     </div>
   );

@@ -1,10 +1,10 @@
-# AthletiQ
+# SPAQ
 
 Modern fitness tracking platform with athlete and coach roles, onboarding-driven setup, real-time chat, metric sharing, and an AI-ready foundation for personalized insights.
 
 ## Overview
 
-AthletiQ is a modular fitness app built around two roles:
+SPAQ is a modular fitness app built around two roles:
 
 - **Athletes** track health and performance metrics in a flexible dashboard
 - **Coaches** monitor connected athletes, review shared metrics, and communicate in real time
@@ -195,7 +195,7 @@ Open http://localhost:5173
 ## Project structure
 
 ```
-AthletiQ/
+SPAQ/
 ├── client/
 │   └── src/
 │       ├── components/

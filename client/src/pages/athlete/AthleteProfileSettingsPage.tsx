@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../lib/api";
 import { useAuth } from "../../hooks/useAuth";
+import BrandLogo from "../../components/layout/BrandLogo";
 
 type PrimaryGoal =
   | "lose_fat"
@@ -829,26 +830,7 @@ export default function AthleteProfileSettingsPage() {
       <header className="border-b border-subtle px-6 py-4">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-[#FFD300]/20 bg-[#FFD300]/10">
-              <svg
-                className="h-5 w-5 text-[#FFD300]"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={1.5}
-                  d="M13 10V3L4 14h7v7l9-11h-7z"
-                />
-              </svg>
-            </div>
-
-            <div>
-              <p className="font-medium text-primary">AthletiQ</p>
-              <p className="text-xs text-muted">Athlete profile settings</p>
-            </div>
+            <BrandLogo imageClassName="h-8 w-auto" />
           </div>
 
           <div className="flex items-center gap-2">
@@ -858,6 +840,7 @@ export default function AthleteProfileSettingsPage() {
             >
               Zurück zum Dashboard
             </Link>
+
             <button
               type="button"
               onClick={handleSave}
@@ -1256,7 +1239,7 @@ export default function AthleteProfileSettingsPage() {
           <SectionCard
             eyebrow="Recovery & AI"
             title="Recovery, Einschränkungen & KI-Ton"
-            subtitle="Wie AthletiQ mit dir sprechen und Empfehlungen an deinen Zustand anpassen soll."
+            subtitle="Wie SPAQ mit dir sprechen und Empfehlungen an deinen Zustand anpassen soll."
           >
             <div className="space-y-7">
               <div>

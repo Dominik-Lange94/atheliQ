@@ -112,7 +112,7 @@ export default function MotivationBot({ hasData, selectedDate }: Props) {
 
               <div className="min-w-0">
                 <h3 className="truncate text-primary font-semibold tracking-tight">
-                  AthletiQ Bot
+                  SPAQ Bot
                 </h3>
                 <p className="text-xs text-muted">
                   {data
@@ -155,7 +155,7 @@ export default function MotivationBot({ hasData, selectedDate }: Props) {
         ) : isLoading ? (
           <div className="rounded-2xl border border-subtle bg-surface-2 p-4">
             <p className="text-sm leading-6 text-muted">
-              AthletiQ analysiert gerade deine Daten…
+              SPAQ analysiert gerade deine Daten…
             </p>
           </div>
         ) : !data?.text ? (

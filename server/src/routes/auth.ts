@@ -221,7 +221,7 @@ router.post(
         success: true,
         data: {
           qrPayload: {
-            type: "athletiq_mobile_login",
+            type: "SPAQ_mobile_login",
             token: rawToken,
           },
           expiresAt: expiresAt.toISOString(),
