@@ -42,18 +42,19 @@ export default function ChatWindow({
         return {
           label: "Anfrage offen",
           className:
-            "bg-[#FFD300]/10 text-[#ffe88a] border border-[#FFD300]/20",
+            "border border-[#FFD300]/20 bg-[#FFD300]/10 text-[#c99700] dark:text-[#ffe88a]",
         };
       case "active":
         return {
           label: "Verbunden",
           className:
-            "bg-emerald-500/10 text-emerald-300 border border-emerald-500/20",
+            "border border-emerald-500/20 bg-emerald-500/10 text-emerald-600 dark:text-emerald-300",
         };
       case "revoked":
         return {
           label: "Beendet",
-          className: "bg-rose-500/10 text-rose-300 border border-rose-500/20",
+          className:
+            "border border-rose-500/20 bg-rose-500/10 text-rose-600 dark:text-rose-300",
         };
       default:
         return null;
@@ -74,13 +75,15 @@ export default function ChatWindow({
 
   if (!thread) {
     return (
-      <section className="flex-1 border border-white/10 rounded-2xl bg-[#15151c] flex items-center justify-center min-h-[600px]">
-        <div className="text-center px-6">
-          <div className="w-14 h-14 rounded-2xl bg-[#FFD300]/10 border border-[#FFD300]/20 flex items-center justify-center mx-auto mb-4">
-            <span className="text-[#FFD300] text-xl">💬</span>
+      <section className="flex min-h-[600px] flex-1 items-center justify-center rounded-2xl border border-subtle bg-surface">
+        <div className="px-6 text-center">
+          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl border border-[#FFD300]/20 bg-[#FFD300]/10">
+            <span className="text-xl text-[#FFD300]">💬</span>
           </div>
-          <h3 className="text-white text-lg font-semibold">Wähle einen Chat</h3>
-          <p className="text-slate-400 text-sm mt-2">
+          <h3 className="text-lg font-semibold text-primary">
+            Wähle einen Chat
+          </h3>
+          <p className="mt-2 text-sm text-muted">
             Öffne einen Coach-Athlete-Thread, um Nachrichten und System-Updates
             zu sehen.
           </p>
@@ -90,17 +93,17 @@ export default function ChatWindow({
   }
 
   return (
-    <section className="h-full min-h-0 flex-1 border border-white/10 rounded-2xl bg-[#15151c] overflow-hidden flex flex-col">
-      <div className="px-5 py-4 border-b border-white/10 flex items-center gap-3">
+    <section className="flex h-full min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-subtle bg-surface">
+      <div className="flex items-center gap-3 border-b border-subtle px-5 py-4">
         {onBack ? (
           <button
             type="button"
             onClick={onBack}
-            className="lg:hidden w-9 h-9 rounded-xl bg-white/5 border border-white/10 hover:border-white/20 hover:bg-white/10 flex items-center justify-center text-slate-300 hover:text-white transition-all"
+            className="flex h-9 w-9 items-center justify-center rounded-xl border border-subtle bg-surface-2 text-secondary transition-all hover:border-strong hover:bg-surface-3 hover:text-primary lg:hidden"
             title="Zurück"
           >
             <svg
-              className="w-4 h-4"
+              className="h-4 w-4"
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"
@@ -116,43 +119,45 @@ export default function ChatWindow({
         ) : null}
 
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2 flex-wrap">
-            <p className="text-white font-semibold truncate">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="truncate font-semibold text-primary">
               {thread.otherUser?.name ?? "Chat"}
             </p>
 
             {statusConfig ? (
               <span
-                className={`text-[11px] px-2 py-1 rounded-full font-medium ${statusConfig.className}`}
+                className={`rounded-full px-2 py-1 text-[11px] font-medium ${statusConfig.className}`}
               >
                 {statusConfig.label}
               </span>
             ) : null}
           </div>
 
-          <p className="text-xs text-slate-400 mt-1 truncate">
+          <p className="mt-1 truncate text-xs text-muted">
             {thread.otherUser?.email ?? ""}
           </p>
         </div>
       </div>
 
-      <div className="flex-1 min-h-0 overflow-y-auto px-4 py-4 space-y-3 bg-[#111118]">
+      <div className="min-h-0 flex-1 overflow-y-auto bg-surface-2 px-4 py-4 space-y-3">
         {isLoading ? (
           <div className="space-y-3">
             {[...Array(6)].map((_, i) => (
               <div
                 key={i}
                 className={`h-16 rounded-2xl animate-pulse ${
-                  i % 2 === 0 ? "bg-white/5 mr-20" : "bg-[#FFD300]/10 ml-20"
+                  i % 2 === 0
+                    ? "mr-20 border border-subtle bg-surface"
+                    : "ml-20 bg-[#FFD300]/10"
                 }`}
               />
             ))}
           </div>
         ) : messages.length === 0 ? (
-          <div className="h-full flex items-center justify-center text-center px-6">
+          <div className="flex h-full items-center justify-center px-6 text-center">
             <div>
-              <p className="text-white font-medium">Noch keine Nachrichten</p>
-              <p className="text-slate-400 text-sm mt-2">
+              <p className="font-medium text-primary">Noch keine Nachrichten</p>
+              <p className="mt-2 text-sm text-muted">
                 {thread.relationStatus === "pending"
                   ? "Die Verbindungsanfrage läuft. Updates erscheinen direkt hier im Chat."
                   : thread.relationStatus === "revoked"
@@ -176,7 +181,7 @@ export default function ChatWindow({
 
       <form
         onSubmit={handleSubmit}
-        className="border-t border-white/10 p-4 flex items-end gap-3"
+        className="flex items-end gap-3 border-t border-subtle p-4"
       >
         <textarea
           value={text}
@@ -184,17 +189,17 @@ export default function ChatWindow({
           rows={2}
           placeholder={composerPlaceholder}
           disabled={disableComposer || isSending}
-          className={`flex-1 resize-none rounded-2xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none transition-all ${
+          className={`flex-1 resize-none rounded-2xl px-4 py-3 text-primary placeholder:text-muted focus:outline-none transition-all ${
             disableComposer
-              ? "bg-white/[0.03] border border-white/5 cursor-not-allowed opacity-70"
-              : "bg-white/5 border border-white/10 focus:border-[#FFD300]/50"
+              ? "cursor-not-allowed border border-subtle bg-surface-2 opacity-70"
+              : "border border-subtle bg-surface-2 focus:border-[#FFD300]/50"
           }`}
         />
 
         <button
           type="submit"
           disabled={!canSubmit}
-          className="px-5 py-3 rounded-2xl bg-[#FFD300] hover:bg-[#e6be00] disabled:opacity-50 disabled:hover:bg-[#FFD300] text-[#0f0f13] font-medium transition-colors"
+          className="rounded-2xl bg-[#FFD300] px-5 py-3 font-medium text-[#0f0f13] transition-colors hover:bg-[#e6be00] disabled:opacity-50 disabled:hover:bg-[#FFD300]"
         >
           {isSending ? "…" : "Senden"}
         </button>

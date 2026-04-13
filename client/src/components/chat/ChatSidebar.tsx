@@ -20,18 +20,20 @@ function getStatusConfig(status?: ChatThread["relationStatus"]) {
     case "pending":
       return {
         label: "Offen",
-        className: "bg-[#FFD300]/10 text-[#ffe88a] border border-[#FFD300]/20",
+        className:
+          "border border-[#FFD300]/20 bg-[#FFD300]/10 text-[#c99700] dark:text-[#ffe88a]",
       };
     case "active":
       return {
         label: "Aktiv",
         className:
-          "bg-emerald-500/10 text-emerald-300 border border-emerald-500/20",
+          "border border-emerald-500/20 bg-emerald-500/10 text-emerald-600 dark:text-emerald-300",
       };
     case "revoked":
       return {
         label: "Beendet",
-        className: "bg-rose-500/10 text-rose-300 border border-rose-500/20",
+        className:
+          "border border-rose-500/20 bg-rose-500/10 text-rose-600 dark:text-rose-300",
       };
     default:
       return null;
@@ -59,31 +61,31 @@ export default function ChatSidebar({
   isLoading,
 }: Props) {
   return (
-    <aside className="w-full lg:w-[320px] border border-white/10 rounded-2xl bg-[#15151c] overflow-hidden h-full min-h-0 flex flex-col">
-      <div className="px-4 py-4 border-b border-white/10 shrink-0">
-        <h2 className="text-white font-semibold">Chats</h2>
-        <p className="text-slate-400 text-xs mt-1">
+    <aside className="flex h-full min-h-0 w-full flex-col overflow-hidden rounded-2xl border border-subtle bg-surface lg:w-[320px]">
+      <div className="shrink-0 border-b border-subtle px-4 py-4">
+        <h2 className="font-semibold text-primary">Chats</h2>
+        <p className="mt-1 text-xs text-muted">
           Coach-Athlete Kommunikation & System-Updates
         </p>
       </div>
 
-      <div className="flex-1 min-h-0 overflow-y-auto">
+      <div className="min-h-0 flex-1 overflow-y-auto">
         {isLoading ? (
-          <div className="p-4 space-y-3">
+          <div className="space-y-3 p-4">
             {[...Array(5)].map((_, i) => (
               <div
                 key={i}
-                className="h-16 rounded-xl bg-white/5 animate-pulse"
+                className="h-16 animate-pulse rounded-xl border border-subtle bg-surface-2"
               />
             ))}
           </div>
         ) : threads.length === 0 ? (
           <div className="p-5 text-center">
-            <div className="w-12 h-12 rounded-2xl bg-[#FFD300]/10 border border-[#FFD300]/20 flex items-center justify-center mx-auto mb-3">
-              <span className="text-[#FFD300] text-lg">💬</span>
+            <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl border border-[#FFD300]/20 bg-[#FFD300]/10">
+              <span className="text-lg text-[#FFD300]">💬</span>
             </div>
-            <p className="text-white font-medium">Keine Chats gefunden</p>
-            <p className="text-sm text-slate-400 mt-2">
+            <p className="font-medium text-primary">Keine Chats gefunden</p>
+            <p className="mt-2 text-sm text-muted">
               Sobald eine Verbindung oder Anfrage existiert, erscheint sie hier.
             </p>
           </div>
@@ -98,18 +100,18 @@ export default function ChatSidebar({
               <button
                 key={thread._id}
                 onClick={() => onSelect(thread)}
-                className={`w-full text-left px-4 py-4 border-b border-white/5 transition-all ${
+                className={`w-full border-b px-4 py-4 text-left transition-all ${
                   active
-                    ? "bg-[#FFD300]/10"
-                    : "hover:bg-white/[0.03] active:bg-white/[0.05]"
+                    ? "border-[rgba(255,211,0,0.12)] bg-[#FFD300]/10"
+                    : "border-subtle hover:bg-surface-2 active:bg-surface-3"
                 }`}
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2 min-w-0 flex-wrap">
+                    <div className="flex min-w-0 flex-wrap items-center gap-2">
                       <p
-                        className={`font-medium truncate ${
-                          active ? "text-[#FFD300]" : "text-white"
+                        className={`truncate font-medium ${
+                          active ? "text-[#FFD300]" : "text-primary"
                         }`}
                       >
                         {thread.otherUser?.name ?? "Chat"}
@@ -117,31 +119,31 @@ export default function ChatSidebar({
 
                       {status ? (
                         <span
-                          className={`text-[10px] px-2 py-1 rounded-full font-medium ${status.className}`}
+                          className={`rounded-full px-2 py-1 text-[10px] font-medium ${status.className}`}
                         >
                           {status.label}
                         </span>
                       ) : null}
                     </div>
 
-                    <p className="text-xs text-slate-400 truncate mt-1">
+                    <p className="mt-1 truncate text-xs text-secondary">
                       {previewText}
                     </p>
 
                     {thread.otherUser?.email ? (
-                      <p className="text-[11px] text-slate-500 truncate mt-1">
+                      <p className="mt-1 truncate text-[11px] text-muted">
                         {thread.otherUser.email}
                       </p>
                     ) : null}
                   </div>
 
-                  <div className="shrink-0 flex flex-col items-end gap-2">
-                    <div className="text-[11px] text-slate-500">
+                  <div className="flex shrink-0 flex-col items-end gap-2">
+                    <div className="text-[11px] text-muted">
                       {formatDate(thread.lastMessageAt)}
                     </div>
 
                     {unreadCount > 0 ? (
-                      <div className="min-w-5 h-5 px-1.5 rounded-full bg-[#FFD300] text-[#0f0f13] text-[11px] font-bold flex items-center justify-center">
+                      <div className="flex h-5 min-w-5 items-center justify-center rounded-full bg-[#FFD300] px-1.5 text-[11px] font-bold text-[#0f0f13]">
                         {unreadCount > 99 ? "99+" : unreadCount}
                       </div>
                     ) : null}

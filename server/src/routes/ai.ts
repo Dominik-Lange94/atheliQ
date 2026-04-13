@@ -36,7 +36,7 @@ router.get("/thread", async (req: AuthRequest, res: Response) => {
       success: true,
       data: {
         thread: {
-          _id: "atheliq-bot",
+          _id: "SPAQ-bot",
           type: "assistant",
           title: "AthletiQ Bot",
           lastMessage:
@@ -47,9 +47,9 @@ router.get("/thread", async (req: AuthRequest, res: Response) => {
         },
         messages: messages.map((m) => ({
           _id: String(m._id),
-          threadId: "atheliq-bot",
-          senderId: m.role === "assistant" ? "atheliq-bot" : req.user!.userId,
-          receiverId: m.role === "assistant" ? req.user!.userId : "atheliq-bot",
+          threadId: "SPAQ-bot",
+          senderId: m.role === "assistant" ? "SPAQ-bot" : req.user!.userId,
+          receiverId: m.role === "assistant" ? req.user!.userId : "SPAQ-bot",
           text: m.text,
           createdAt: m.createdAt,
           readAt: m.createdAt,
@@ -239,9 +239,9 @@ Aufgabe:
       data: {
         userMessage: {
           _id: String(userMessage._id),
-          threadId: "atheliq-bot",
+          threadId: "SPAQ-bot",
           senderId: req.user!.userId,
-          receiverId: "atheliq-bot",
+          receiverId: "SPAQ-bot",
           text: userMessage.text,
           createdAt: userMessage.createdAt,
           readAt: userMessage.createdAt,
@@ -249,8 +249,8 @@ Aufgabe:
         },
         assistantMessage: {
           _id: String(assistantMessage._id),
-          threadId: "atheliq-bot",
-          senderId: "atheliq-bot",
+          threadId: "SPAQ-bot",
+          senderId: "SPAQ-bot",
           receiverId: req.user!.userId,
           text: assistantMessage.text,
           createdAt: assistantMessage.createdAt,

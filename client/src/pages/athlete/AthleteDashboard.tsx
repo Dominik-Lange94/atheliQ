@@ -17,6 +17,7 @@ import {
   arrayMove,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import { Link } from "react-router-dom";
 import { useAuth } from "../../hooks/useAuth";
 import {
   useCards,
@@ -24,7 +25,7 @@ import {
   useDayStats,
   useReorderCards,
 } from "../../hooks/useStats";
-import { api } from "../../lib/api";
+import { useChatUnread } from "../../hooks/useChatUnread";
 import StatCard from "../../components/cards/StatCard";
 import AddCardModal from "../../components/cards/AddCardModal";
 import MainChart from "../../components/chart/MainChart";
@@ -32,8 +33,7 @@ import CoachesPage from "./CoachesPage";
 import WeatherClock from "../../components/layout/WeatherClock";
 import MobileConnectModal from "../../components/auth/MobileConnectModal";
 import MotivationBot from "../../components/ui/MotivationBot";
-import { Link } from "react-router-dom";
-import { useChatUnread } from "../../hooks/useChatUnread";
+import ThemeToggle from "../../components/layout/ThemeToggle";
 
 const STORAGE_KEY = "fittrack_selected_cards";
 
@@ -48,6 +48,7 @@ function formatDateDisplay(dateStr: string): string {
   const yesterday = toDateStr(new Date(Date.now() - 86400000));
   if (dateStr === today) return "Heute";
   if (dateStr === yesterday) return "Gestern";
+
   return new Date(dateStr + "T12:00:00").toLocaleDateString("de-DE", {
     weekday: "long",
     day: "2-digit",
@@ -55,24 +56,24 @@ function formatDateDisplay(dateStr: string): string {
   });
 }
 
-// Build 8-day window centered on selectedDate, but always including today.
-// The window scrolls left/right based on windowOffset (days from today).
 function buildDayWindow(
   windowOffset: number
 ): { dateStr: string; day: number; weekday: string }[] {
   const days = [];
-  // Show 8 days: from (today + windowOffset - 7) to (today + windowOffset)
-  const end = windowOffset; // offset from today
-  const start = end - 7; // 8 days total
+  const end = windowOffset;
+  const start = end - 7;
+
   for (let i = start; i <= end; i++) {
     const d = new Date(TODAY + "T12:00:00");
     d.setDate(d.getDate() + i);
+
     days.push({
       dateStr: toDateStr(d),
       day: d.getDate(),
       weekday: d.toLocaleDateString("de-DE", { weekday: "short" }).slice(0, 2),
     });
   }
+
   return days;
 }
 
@@ -95,6 +96,7 @@ function SortableStatCard({
     transition,
     isDragging,
   } = useSortable({ id: card._id });
+
   return (
     <div
       ref={setNodeRef}
@@ -105,19 +107,21 @@ function SortableStatCard({
       {...attributes}
       {...listeners}
     >
-      <div className="absolute inset-0 z-10 rounded-2xl ring-2 ring-[#FFD300]/40 ring-dashed pointer-events-none" />
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-20 pointer-events-none">
-        <div className="bg-black/60 rounded-lg px-2 py-1 flex items-center gap-1.5">
+      <div className="pointer-events-none absolute inset-0 z-10 rounded-2xl ring-2 ring-[#FFD300]/40 ring-dashed" />
+
+      <div className="pointer-events-none absolute left-1/2 top-1/2 z-20 -translate-x-1/2 -translate-y-1/2">
+        <div className="flex items-center gap-1.5 rounded-lg bg-black/60 px-2 py-1 dark:bg-black/60">
           <svg
-            className="w-3 h-3 text-[#FFD300]"
+            className="h-3 w-3 text-[#FFD300]"
             fill="currentColor"
             viewBox="0 0 20 20"
           >
             <path d="M7 4a1 1 0 100 2 1 1 0 000-2zM7 9a1 1 0 100 2 1 1 0 000-2zM7 14a1 1 0 100 2 1 1 0 000-2zM13 4a1 1 0 100 2 1 1 0 000-2zM13 9a1 1 0 100 2 1 1 0 000-2zM13 14a1 1 0 100 2 1 1 0 000-2z" />
           </svg>
-          <span className="text-[10px] text-[#FFD300] font-medium">Ziehen</span>
+          <span className="text-[10px] font-medium text-[#FFD300]">Ziehen</span>
         </div>
       </div>
+
       <div className="pointer-events-none opacity-60">
         <StatCard
           card={card}
@@ -135,6 +139,8 @@ export default function AthleteDashboard() {
   const { data: cards = [], isLoading: cardsLoading } = useCards();
   const reorderCards = useReorderCards();
   const { data: latestStats = [] } = useLatestStats();
+  const { totalUnread } = useChatUnread();
+
   const [showAddModal, setShowAddModal] = useState(false);
   const [showCoaches, setShowCoaches] = useState(false);
   const [arrangeMode, setArrangeMode] = useState(false);
@@ -142,9 +148,6 @@ export default function AthleteDashboard() {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [showMobileConnect, setShowMobileConnect] = useState(false);
   const [selectedDate, setSelectedDate] = useState<string>(TODAY);
-
-  // windowOffset: how many days the 8-day window is shifted from today
-  // 0 = window ends today, -1 = window ends yesterday, etc.
   const [windowOffset, setWindowOffset] = useState<number>(0);
 
   const isToday = selectedDate === TODAY;
@@ -193,6 +196,7 @@ export default function AthleteDashboard() {
 
   const handleDragStart = (e: DragStartEvent) =>
     setActiveId(e.active.id as string);
+
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     setActiveId(null);
@@ -206,17 +210,17 @@ export default function AthleteDashboard() {
       if (oldIndex === -1 || newIndex === -1) return prev;
 
       const newOrder = arrayMove(prev, oldIndex, newIndex);
-
       reorderCards.mutate(newOrder);
 
       return newOrder;
     });
   };
 
-  const toggleCardSelect = (id: string) =>
+  const toggleCardSelect = (id: string) => {
     setSelectedCardIds((prev) =>
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
     );
+  };
 
   const getDayValue = (cardId: string) => {
     const match = dayStats.find((s: any) => s.card._id === cardId);
@@ -228,35 +232,31 @@ export default function AthleteDashboard() {
     return match?.latest ?? null;
   };
 
-  // Pagination: shift window left/right
   const shiftWindowLeft = () => {
     setWindowOffset((o) => o - 1);
   };
+
   const shiftWindowRight = () => {
-    // Don't go past today (windowOffset max = 0)
     if (windowOffset < 0) setWindowOffset((o) => o + 1);
   };
 
-  // When selecting a date outside current window, re-center window
   const selectDate = (dateStr: string) => {
     setSelectedDate(dateStr);
-    // Compute offset of selected date from today
+
     const todayMs = new Date(TODAY + "T12:00:00").getTime();
     const selectedMs = new Date(dateStr + "T12:00:00").getTime();
     const diffDays = Math.round((selectedMs - todayMs) / 86400000);
-    // Keep window so selected date is visible (within window end offset)
-    // Window shows [offset-7 .. offset], offset <= 0
-    const windowEnd = Math.min(diffDays, 0); // never past today
+    const windowEnd = Math.min(diffDays, 0);
+
     setWindowOffset(windowEnd);
   };
 
-  // Top-right pagination (← →) moves selected date and re-centers window
   const goToPrevDay = () => {
     const d = new Date(selectedDate + "T12:00:00");
     d.setDate(d.getDate() - 1);
     const newDate = toDateStr(d);
     setSelectedDate(newDate);
-    // If new date is outside window, shift window
+
     if (!buildDayWindow(windowOffset).find((day) => day.dateStr === newDate)) {
       setWindowOffset((o) => o - 1);
     }
@@ -264,11 +264,14 @@ export default function AthleteDashboard() {
 
   const goToNextDay = () => {
     if (isToday) return;
+
     const d = new Date(selectedDate + "T12:00:00");
     d.setDate(d.getDate() + 1);
     const newDate = toDateStr(d);
+
     if (newDate <= TODAY) {
       setSelectedDate(newDate);
+
       if (
         !buildDayWindow(windowOffset).find((day) => day.dateStr === newDate)
       ) {
@@ -279,17 +282,16 @@ export default function AthleteDashboard() {
 
   const activeCard = orderedCards.find((c) => c._id === activeId);
   const hasAnyData = latestStats.some((s: any) => s.latest !== null);
-  const { totalUnread } = useChatUnread();
 
   if (showCoaches) return <CoachesPage onClose={() => setShowCoaches(false)} />;
 
   return (
-    <div className="min-h-screen bg-[#0f0f13]">
-      <header className="relative border-b border-white/10 px-6 py-4 flex items-center justify-between">
+    <div className="min-h-screen bg-app">
+      <header className="relative flex items-center justify-between border-b border-subtle px-6 py-4">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-xl bg-[#FFD300]/10 border border-[#FFD300]/20 flex items-center justify-center">
+          <div className="flex h-8 w-8 items-center justify-center rounded-xl border border-[#FFD300]/20 bg-[#FFD300]/10">
             <svg
-              className="w-4 h-4 text-[#FFD300]"
+              className="h-4 w-4 text-[#FFD300]"
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"
@@ -302,20 +304,20 @@ export default function AthleteDashboard() {
               />
             </svg>
           </div>
-          <span className="text-white font-medium">AthletiQ</span>
+          <span className="font-medium text-primary">AthletiQ</span>
         </div>
 
-        <div className="absolute left-1/2 -translate-x-1/2 hidden lg:flex items-center">
+        <div className="absolute left-1/2 hidden -translate-x-1/2 lg:flex items-center">
           <WeatherClock />
         </div>
 
         <div className="flex items-center gap-2">
           <button
             onClick={() => setShowCoaches(true)}
-            className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-white transition-colors px-3 py-1.5 rounded-lg border border-white/10 hover:border-white/20"
+            className="flex items-center gap-1.5 rounded-lg border border-subtle bg-surface px-3 py-1.5 text-xs text-muted transition-colors hover:border-strong hover:text-primary"
           >
             <svg
-              className="w-3.5 h-3.5"
+              className="h-3.5 w-3.5"
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"
@@ -329,16 +331,38 @@ export default function AthleteDashboard() {
             </svg>
             Coaches
           </button>
-          <span className="text-slate-400 text-sm hidden sm:block">
+
+          <Link
+            to="/athlete/settings/profile"
+            className="flex items-center gap-1.5 rounded-lg border border-subtle bg-surface px-3 py-1.5 text-xs text-muted transition-colors hover:border-strong hover:text-primary"
+          >
+            <svg
+              className="h-3.5 w-3.5"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={1.7}
+                d="M5.121 17.804A9 9 0 1118.88 17.804M15 11a3 3 0 11-6 0 3 3 0 016 0z"
+              />
+            </svg>
+            Profil
+          </Link>
+
+          <span className="hidden text-sm text-muted sm:block">
             {user?.name}
           </span>
+
           <Link
             to="/chat"
-            className="relative flex items-center justify-center w-10 h-10 rounded-xl bg-white/5 border border-white/10 hover:border-white/20 hover:bg-white/10 transition-all"
+            className="relative flex h-10 w-10 items-center justify-center rounded-xl border border-subtle bg-surface transition-all hover:border-strong"
             title="Nachrichten"
           >
             <svg
-              className="w-5 h-5 text-white"
+              className="h-5 w-5 text-primary"
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"
@@ -352,51 +376,55 @@ export default function AthleteDashboard() {
             </svg>
 
             {totalUnread > 0 ? (
-              <span className="absolute -top-1 -right-1 min-w-5 h-5 px-1.5 rounded-full bg-[#FFD300] text-[#0f0f13] text-[10px] font-extrabold flex items-center justify-center shadow-lg">
+              <span className="absolute -top-1 -right-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-[#FFD300] px-1.5 text-[10px] font-extrabold text-[#0f0f13] shadow-lg">
                 {totalUnread > 99 ? "99+" : totalUnread}
               </span>
             ) : null}
           </Link>
+
           <button
             onClick={() => setShowMobileConnect(true)}
-            className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-white transition-colors px-3 py-1.5 rounded-lg border border-white/10 hover:border-white/20"
+            className="flex items-center gap-1.5 rounded-lg border border-subtle bg-surface px-3 py-1.5 text-xs text-muted transition-colors hover:border-strong hover:text-primary"
           >
             Mobile verbinden
           </button>
+
+          <ThemeToggle />
+
           <button
             onClick={logout}
-            className="text-xs text-slate-400 hover:text-white transition-colors px-3 py-1.5 rounded-lg border border-white/10 hover:border-white/20"
+            className="rounded-lg border border-subtle bg-surface px-3 py-1.5 text-xs text-muted transition-colors hover:border-strong hover:text-primary"
           >
             Sign out
           </button>
         </div>
       </header>
 
-      <main className="max-w-5xl mx-auto px-4 sm:px-6 py-8 space-y-6">
-        {/* Greeting + Option A date control */}
+      <main className="mx-auto max-w-5xl space-y-6 px-4 py-8 sm:px-6">
         <div className="flex items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-semibold text-white">
+            <h1 className="text-2xl font-semibold text-primary">
               Hey, {user?.name?.split(" ")[0]} 👋
             </h1>
-            <p className="text-slate-400 text-sm mt-1">
+            <p className="mt-1 text-sm text-muted">
               Here's your performance overview
             </p>
           </div>
 
-          <div className="flex items-center gap-2 bg-white/3 border border-white/10 rounded-xl px-3 py-2 flex-shrink-0">
+          <div className="flex flex-shrink-0 items-center gap-2 rounded-xl border border-subtle bg-surface px-3 py-2">
             <button
               onClick={goToPrevDay}
-              className="w-7 h-7 rounded-lg bg-white/5 border border-white/10 hover:border-white/20 flex items-center justify-center text-slate-400 hover:text-white transition-all text-sm"
+              className="flex h-7 w-7 items-center justify-center rounded-lg border border-subtle bg-surface-2 text-sm text-muted transition-all hover:border-strong hover:text-primary"
             >
               ←
             </button>
-            <div className="text-center min-w-[130px]">
-              <p className="text-white text-sm font-medium leading-tight">
+
+            <div className="min-w-[130px] text-center">
+              <p className="text-sm font-medium leading-tight text-primary">
                 {formatDateDisplay(selectedDate)}
               </p>
               {!isToday && (
-                <p className="text-slate-500 text-xs">
+                <p className="text-xs text-muted">
                   {new Date(selectedDate + "T12:00:00").toLocaleDateString(
                     "de-DE",
                     { day: "2-digit", month: "2-digit", year: "2-digit" }
@@ -404,23 +432,26 @@ export default function AthleteDashboard() {
                 </p>
               )}
             </div>
+
             <button
               onClick={goToNextDay}
               disabled={isToday}
-              className="w-7 h-7 rounded-lg bg-white/5 border border-white/10 hover:border-white/20 flex items-center justify-center text-slate-400 hover:text-white transition-all disabled:opacity-30 disabled:cursor-not-allowed text-sm"
+              className="flex h-7 w-7 items-center justify-center rounded-lg border border-subtle bg-surface-2 text-sm text-muted transition-all hover:border-strong hover:text-primary disabled:cursor-not-allowed disabled:opacity-30"
             >
               →
             </button>
-            <div className="w-px h-5 bg-white/10" />
+
+            <div className="h-5 w-px bg-[var(--border-subtle)]" />
+
             <button
               onClick={() => {
                 setSelectedDate(TODAY);
                 setWindowOffset(0);
               }}
               disabled={isToday}
-              className={`text-xs px-2.5 py-1 rounded-lg border transition-all ${
+              className={`rounded-lg border px-2.5 py-1 text-xs transition-all ${
                 isToday
-                  ? "border-white/5 text-slate-600 cursor-not-allowed"
+                  ? "cursor-not-allowed border-subtle text-muted opacity-50"
                   : "border-[#FFD300]/30 text-[#FFD300] hover:border-[#FFD300]/60 hover:bg-[#FFD300]/5"
               }`}
             >
@@ -429,7 +460,6 @@ export default function AthleteDashboard() {
           </div>
         </div>
 
-        {/* Main chart */}
         <MainChart
           key={orderedCards
             .map((c: any) => `${c._id}-${c.chartType}`)
@@ -439,15 +469,13 @@ export default function AthleteDashboard() {
           selectedDate={selectedDate}
         />
 
-        {/* Motivation bot */}
         <MotivationBot hasData={hasAnyData} selectedDate={selectedDate} />
 
-        {/* Cards section */}
         <div>
-          <div className="flex items-center justify-between mb-4 gap-2">
+          <div className="mb-4 flex items-center justify-between gap-2">
             <div className="flex-shrink-0">
-              <h2 className="text-white font-medium">Your metrics</h2>
-              <p className="text-slate-400 text-xs mt-0.5">
+              <h2 className="font-medium text-primary">Your metrics</h2>
+              <p className="mt-0.5 text-xs text-muted">
                 {dayLoading
                   ? "Lade…"
                   : isToday
@@ -455,17 +483,18 @@ export default function AthleteDashboard() {
                   : formatDateDisplay(selectedDate)}
               </p>
             </div>
-            <div className="flex items-center gap-2 flex-shrink-0">
+
+            <div className="flex flex-shrink-0 items-center gap-2">
               <button
                 onClick={() => setArrangeMode((v) => !v)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium border transition-all ${
+                className={`flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-medium transition-all ${
                   arrangeMode
-                    ? "bg-[#FFD300]/10 border-[#FFD300]/40 text-[#FFD300]"
-                    : "bg-transparent border-white/20 text-slate-400 hover:text-white hover:border-white/30"
+                    ? "border-[#FFD300]/40 bg-[#FFD300]/10 text-[#FFD300]"
+                    : "border-subtle bg-surface text-muted hover:border-strong hover:text-primary"
                 }`}
               >
                 <svg
-                  className="w-3.5 h-3.5"
+                  className="h-3.5 w-3.5"
                   fill="none"
                   viewBox="0 0 24 24"
                   stroke="currentColor"
@@ -479,13 +508,14 @@ export default function AthleteDashboard() {
                 </svg>
                 {arrangeMode ? "Fertig" : "Arrange cards"}
               </button>
+
               {!arrangeMode && (
                 <button
                   onClick={() => setShowAddModal(true)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#FFD300] hover:bg-[#e6be00] text-[#0f0f13] text-sm font-medium transition-colors"
+                  className="flex items-center gap-1.5 rounded-xl bg-[#FFD300] px-3 py-1.5 text-sm font-medium text-[#0f0f13] transition-colors hover:bg-[#e6be00]"
                 >
                   <svg
-                    className="w-4 h-4"
+                    className="h-4 w-4"
                     fill="none"
                     viewBox="0 0 24 24"
                     stroke="currentColor"
@@ -504,17 +534,17 @@ export default function AthleteDashboard() {
           </div>
 
           {cardsLoading ? (
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
               {[...Array(4)].map((_, i) => (
                 <div
                   key={i}
-                  className="h-28 rounded-2xl bg-white/5 animate-pulse"
+                  className="h-28 rounded-2xl border border-subtle bg-surface-2 animate-pulse"
                 />
               ))}
             </div>
           ) : orderedCards.length === 0 ? (
-            <div className="border border-dashed border-white/10 rounded-2xl p-12 text-center">
-              <p className="text-slate-400 text-sm">
+            <div className="rounded-2xl border border-dashed border-subtle bg-surface p-12 text-center">
+              <p className="text-sm text-muted">
                 No cards yet — add your first metric above
               </p>
             </div>
@@ -529,28 +559,27 @@ export default function AthleteDashboard() {
                 items={orderedCards.map((c) => c._id)}
                 strategy={rectSortingStrategy}
               >
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
                   {orderedCards.map((card: any) => (
                     <SortableStatCard
                       key={card._id}
                       card={card}
                       latest={getDayValue(card._id) ?? getLatest(card._id)}
-                      selectedDate={selectedDate}
                       selected={selectedCardIds.includes(card._id)}
                       onToggleSelect={() => {}}
                     />
                   ))}
                 </div>
               </SortableContext>
+
               <DragOverlay dropAnimation={{ duration: 150, easing: "ease" }}>
                 {activeCard ? (
-                  <div className="rotate-1 scale-105 shadow-2xl shadow-black/60">
+                  <div className="rotate-1 scale-105 shadow-2xl shadow-black/20 dark:shadow-black/60">
                     <StatCard
                       card={activeCard}
                       latest={
                         getDayValue(activeCard._id) ?? getLatest(activeCard._id)
                       }
-                      selectedDate={selectedDate}
                       selected={selectedCardIds.includes(activeCard._id)}
                       onToggleSelect={() => {}}
                     />
@@ -559,13 +588,12 @@ export default function AthleteDashboard() {
               </DragOverlay>
             </DndContext>
           ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
               {orderedCards.map((card: any) => (
                 <StatCard
                   key={card._id}
                   card={card}
                   latest={getDayValue(card._id) ?? getLatest(card._id)}
-                  selectedDate={selectedDate}
                   selected={selectedCardIds.includes(card._id)}
                   onToggleSelect={() => toggleCardSelect(card._id)}
                 />
@@ -574,36 +602,34 @@ export default function AthleteDashboard() {
           )}
         </div>
 
-        {/* Day strip — below cards, with border and pagination */}
-        <div className="border border-white/10 rounded-2xl p-3">
+        <div className="rounded-2xl border border-subtle bg-surface p-3">
           <div className="flex items-center gap-2">
-            {/* Scroll left */}
             <button
               onClick={shiftWindowLeft}
-              className="w-7 h-7 rounded-lg bg-white/5 border border-white/10 hover:border-white/20 flex items-center justify-center text-slate-400 hover:text-white transition-all flex-shrink-0 text-sm"
+              className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg border border-subtle bg-surface-2 text-sm text-muted transition-all hover:border-strong hover:text-primary"
             >
               ←
             </button>
 
-            {/* Day buttons */}
-            <div className="flex-1 flex gap-1">
+            <div className="flex flex-1 gap-1">
               {dayWindow.map(({ dateStr, day, weekday }) => {
                 const isSelected = dateStr === selectedDate;
                 const isT = dateStr === TODAY;
                 const isFuture = dateStr > TODAY;
+
                 return (
                   <button
                     key={dateStr}
                     onClick={() => !isFuture && selectDate(dateStr)}
                     disabled={isFuture}
-                    className={`flex-1 flex flex-col items-center gap-0.5 py-1.5 rounded-lg border transition-all ${
+                    className={`flex flex-1 flex-col items-center gap-0.5 rounded-lg border py-1.5 transition-all ${
                       isSelected
-                        ? "bg-[#FFD300]/12 border-[#FFD300]/40"
+                        ? "border-[#FFD300]/40 bg-[#FFD300]/12"
                         : isT
-                        ? "bg-white/5 border-white/15 hover:border-white/25"
+                        ? "border-subtle bg-surface-2 hover:border-strong"
                         : isFuture
-                        ? "border-transparent opacity-20 cursor-not-allowed"
-                        : "border-transparent hover:bg-white/5 hover:border-white/10"
+                        ? "cursor-not-allowed border-transparent opacity-20"
+                        : "border-transparent hover:border-subtle hover:bg-surface-2"
                     }`}
                   >
                     <span
@@ -611,39 +637,41 @@ export default function AthleteDashboard() {
                         isSelected
                           ? "text-[#FFD300]"
                           : isT
-                          ? "text-slate-300"
-                          : "text-slate-500"
+                          ? "text-secondary"
+                          : "text-muted"
                       }`}
                     >
                       {weekday}
                     </span>
+
                     <span
                       className={`text-xs font-semibold leading-none ${
                         isSelected
                           ? "text-[#FFD300]"
                           : isT
-                          ? "text-white"
-                          : "text-slate-400"
+                          ? "text-primary"
+                          : "text-secondary"
                       }`}
                     >
                       {day}
                     </span>
+
                     {isT && !isSelected && (
-                      <span className="w-1 h-1 rounded-full bg-[#FFD300]/50 mt-0.5" />
+                      <span className="mt-0.5 h-1 w-1 rounded-full bg-[#FFD300]/50" />
                     )}
+
                     {isSelected && (
-                      <span className="w-1 h-1 rounded-full bg-[#FFD300] mt-0.5" />
+                      <span className="mt-0.5 h-1 w-1 rounded-full bg-[#FFD300]" />
                     )}
                   </button>
                 );
               })}
             </div>
 
-            {/* Scroll right — disabled when window already ends at today */}
             <button
               onClick={shiftWindowRight}
               disabled={windowOffset >= 0}
-              className="w-7 h-7 rounded-lg bg-white/5 border border-white/10 hover:border-white/20 flex items-center justify-center text-slate-400 hover:text-white transition-all flex-shrink-0 disabled:opacity-30 disabled:cursor-not-allowed text-sm"
+              className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg border border-subtle bg-surface-2 text-sm text-muted transition-all hover:border-strong hover:text-primary disabled:cursor-not-allowed disabled:opacity-30"
             >
               →
             </button>

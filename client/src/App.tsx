@@ -13,6 +13,8 @@ import CoachDashboard from "./pages/coach/CoachDashboard";
 import OnboardingPage from "./pages/onboarding/OnboardingPage";
 import ChatPage from "./pages/chat/ChatPage";
 import GlobalChatNotifier from "./components/chat/GlobalChatNotifier";
+import AthleteProfileSettingsPage from "./pages/athlete/AthleteProfileSettingsPage";
+import { ThemeProvider } from "./hooks/useTheme";
 
 const ProtectedRoute = ({
   children,
@@ -82,51 +84,62 @@ function AppChrome() {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <BrowserRouter>
-        <AppChrome />
-        <Routes>
-          <Route path="/" element={<RoleRedirect />} />
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/register" element={<RegisterPage />} />
+    <ThemeProvider>
+      <AuthProvider>
+        <BrowserRouter>
+          <AppChrome />
+          <Routes>
+            <Route path="/" element={<RoleRedirect />} />
+            <Route path="/login" element={<LoginPage />} />
+            <Route path="/register" element={<RegisterPage />} />
 
-          <Route
-            path="/onboarding"
-            element={
-              <ProtectedRoute role="athlete">
-                <OnboardingPage />
-              </ProtectedRoute>
-            }
-          />
+            <Route
+              path="/onboarding"
+              element={
+                <ProtectedRoute role="athlete">
+                  <OnboardingPage />
+                </ProtectedRoute>
+              }
+            />
 
-          <Route
-            path="/athlete"
-            element={
-              <ProtectedRoute role="athlete">
-                <AthleteDashboard />
-              </ProtectedRoute>
-            }
-          />
+            <Route
+              path="/athlete"
+              element={
+                <ProtectedRoute role="athlete">
+                  <AthleteDashboard />
+                </ProtectedRoute>
+              }
+            />
 
-          <Route
-            path="/coach"
-            element={
-              <ProtectedRoute role="coach">
-                <CoachDashboard />
-              </ProtectedRoute>
-            }
-          />
+            <Route
+              path="/athlete/settings/profile"
+              element={
+                <ProtectedRoute role="athlete">
+                  <AthleteProfileSettingsPage />
+                </ProtectedRoute>
+              }
+            />
 
-          <Route
-            path="/chat"
-            element={
-              <ProtectedRoute>
-                <ChatPage />
-              </ProtectedRoute>
-            }
-          />
-        </Routes>
-      </BrowserRouter>
-    </AuthProvider>
+            <Route
+              path="/coach"
+              element={
+                <ProtectedRoute role="coach">
+                  <CoachDashboard />
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/chat"
+              element={
+                <ProtectedRoute>
+                  <ChatPage />
+                </ProtectedRoute>
+              }
+            />
+          </Routes>
+        </BrowserRouter>
+      </AuthProvider>
+    </ThemeProvider>
   );
 }
