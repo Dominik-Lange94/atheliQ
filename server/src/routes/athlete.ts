@@ -6,6 +6,8 @@ import StatCard from "../models/StatCard";
 import StatEntry from "../models/StatEntry";
 import AthleteProfile from "../models/AthleteProfile";
 import { ensureOnboardingPresetCards } from "../lib/onboarding-presets";
+import AiChatMessage from "../models/AiChatMessage";
+import User from "../models/User";
 
 const router = Router();
 router.use(authenticate, requireRole("athlete"));
@@ -34,6 +36,80 @@ function normalizeRecordedAt(date?: string) {
   if (!date) return new Date();
   const d = new Date(`${date}T12:00:00`);
   return Number.isNaN(d.getTime()) ? new Date() : d;
+}
+
+// Welcome Message
+
+async function ensureSpaqWelcomeMessage(params: {
+  athleteId: string;
+  athleteName?: string | null;
+  primaryGoal?: string | null;
+  startMode?: string | null;
+}) {
+  const existing = await AiChatMessage.findOne({
+    athleteId: params.athleteId,
+    role: "assistant",
+    "meta.kind": "chat",
+    "meta.isOnboardingWelcome": true,
+  }).lean();
+
+  if (existing) return existing;
+
+  const firstName = params.athleteName?.trim()?.split(/\s+/)[0] || "du";
+
+  const goalText =
+    params.primaryGoal === "lose_fat"
+      ? "Körperfett zu reduzieren"
+      : params.primaryGoal === "maintain"
+      ? "deinen aktuellen Stand zu halten"
+      : params.primaryGoal === "gain_weight"
+      ? "gesund zuzunehmen"
+      : params.primaryGoal === "build_muscle"
+      ? "Muskeln aufzubauen"
+      : params.primaryGoal === "fitness"
+      ? "deine Fitness zu verbessern"
+      : params.primaryGoal === "health"
+      ? "deine Gesundheit zu verbessern"
+      : "sichtbaren Fortschritt zu machen";
+
+  const setupText =
+    params.startMode === "smart"
+      ? "Ich habe dir bereits ein smartes Start-Setup vorbereitet."
+      : params.startMode === "template"
+      ? "Ich habe dir bereits ein passendes Template-Setup vorbereitet."
+      : params.startMode === "blank"
+      ? "Du startest mit einem cleanen Setup und kannst alles flexibel aufbauen."
+      : "Dein Setup ist jetzt startklar.";
+
+  const text = [
+    `Willkommen bei SPAQ, ${firstName} 👋`,
+    "",
+    setupText,
+    `Dein Profil ist fertig und ab jetzt helfe ich dir dabei, ${goalText}.`,
+    "",
+    "Für einen guten Start empfehle ich dir:",
+    "• beginne mit deinen ersten Einträgen und halte dein Tracking bewusst einfach",
+    "• aktualisiere dein Profil, sobald sich Ziele oder Gewohnheiten ändern",
+    "• füge bei Bedarf später einen Coach hinzu",
+    "• nutze die Mobile-Verbindung, wenn du SPAQ auch mit dem Handy verwenden möchtest",
+    "",
+    "Du kannst mich jederzeit nach Motivation, Fortschritt, Trends oder sinnvollen nächsten Schritten fragen.",
+    "",
+    "Ein guter Start wäre zum Beispiel: „Wo sollte mein Fokus gerade liegen?“",
+  ].join("\n");
+
+  return AiChatMessage.create({
+    athleteId: params.athleteId,
+    role: "assistant",
+    text,
+    readAt: null,
+    meta: {
+      provider: "system",
+      model: "spaq-onboarding",
+      kind: "chat",
+      isOnboardingWelcome: true,
+    },
+  });
 }
 
 // GET /api/athlete/cards
@@ -424,6 +500,15 @@ router.post("/onboarding", async (req: AuthRequest, res: Response) => {
       startMode,
       selectedTemplate,
       primaryGoal,
+    });
+
+    const athleteUser = await User.findById(athleteId).select("name").lean();
+
+    await ensureSpaqWelcomeMessage({
+      athleteId: athleteId.toString(),
+      athleteName: athleteUser?.name ?? null,
+      primaryGoal,
+      startMode,
     });
 
     const currentWeight = toFiniteNumber(body.currentWeightKg);

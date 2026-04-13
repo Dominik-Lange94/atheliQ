@@ -128,6 +128,40 @@ export default function ChatPage() {
     }
   }, []);
 
+  const markAiThreadAsRead = useCallback(async () => {
+    try {
+      await api.post("/ai/thread/read");
+
+      const now = new Date().toISOString();
+
+      setAiThread((prev) => (prev ? { ...prev, unreadCount: 0 } : prev));
+
+      setAiMessages((prev) =>
+        prev.map((message) =>
+          message.senderId === AI_THREAD_ID && !message.readAt
+            ? { ...message, readAt: now }
+            : message
+        )
+      );
+
+      setMessages((prev) =>
+        prev.map((message) =>
+          message.senderId === AI_THREAD_ID && !message.readAt
+            ? { ...message, readAt: now }
+            : message
+        )
+      );
+
+      setActiveThread((prev) =>
+        prev?._id === AI_THREAD_ID ? { ...prev, unreadCount: 0 } : prev
+      );
+
+      notifyGlobalChatRefresh();
+    } catch (error) {
+      console.error("Failed to mark AI thread as read", error);
+    }
+  }, []);
+
   const loadAiThread = useCallback(async () => {
     if (!isAthlete) {
       setAiEnabled(false);
@@ -305,6 +339,20 @@ export default function ChatPage() {
 
     void loadMessages(activeThread._id, true);
   }, [activeThread?._id, loadMessages]);
+
+  useEffect(() => {
+    if (activeThread?._id !== AI_THREAD_ID) return;
+
+    const hasUnreadAiMessages = messages.some(
+      (message) => message.senderId === AI_THREAD_ID && !message.readAt
+    );
+
+    const hasUnreadBadge = (aiThread?.unreadCount ?? 0) > 0;
+
+    if (!hasUnreadAiMessages && !hasUnreadBadge) return;
+
+    void markAiThreadAsRead();
+  }, [activeThread?._id, messages, aiThread?.unreadCount, markAiThreadAsRead]);
 
   useEffect(() => {
     if (!activeThread?._id || activeThread._id === AI_THREAD_ID) return;
@@ -641,7 +689,9 @@ export default function ChatPage() {
     : "Dieser Chat ist nicht mehr aktiv";
 
   const handleBack = async () => {
-    if (activeThread?._id && activeThread._id !== AI_THREAD_ID) {
+    if (activeThread?._id === AI_THREAD_ID) {
+      await markAiThreadAsRead();
+    } else if (activeThread?._id) {
       await markThreadAsRead(activeThread._id);
     }
 
@@ -816,12 +866,12 @@ export default function ChatPage() {
                   isLoading={messagesLoading}
                   isSending={sending}
                   onBack={async () => {
-                    if (
-                      activeThread?._id &&
-                      activeThread._id !== AI_THREAD_ID
-                    ) {
+                    if (activeThread?._id === AI_THREAD_ID) {
+                      await markAiThreadAsRead();
+                    } else if (activeThread?._id) {
                       await markThreadAsRead(activeThread._id);
                     }
+
                     setActiveThread(null);
                   }}
                   disableComposer={!canSendNormalMessages}

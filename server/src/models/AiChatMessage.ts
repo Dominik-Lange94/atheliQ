@@ -18,6 +18,11 @@ const AiChatMessageSchema = new Schema(
       required: true,
       trim: true,
     },
+    readAt: {
+      type: Date,
+      default: null,
+      index: true,
+    },
     meta: {
       provider: { type: String, default: "ollama" },
       model: { type: String, default: "" },
@@ -26,12 +31,24 @@ const AiChatMessageSchema = new Schema(
         enum: ["chat", "motivation", "insight"],
         default: "chat",
       },
+      isOnboardingWelcome: {
+        type: Boolean,
+        default: false,
+        index: true,
+      },
     },
   },
   { timestamps: true }
 );
 
 AiChatMessageSchema.index({ athleteId: 1, createdAt: -1 });
+AiChatMessageSchema.index({
+  athleteId: 1,
+  role: 1,
+  readAt: 1,
+  "meta.kind": 1,
+  "meta.isOnboardingWelcome": 1,
+});
 
 export type AiChatMessageDoc = InferSchemaType<typeof AiChatMessageSchema>;
 

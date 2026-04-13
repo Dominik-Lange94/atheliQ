@@ -4,25 +4,49 @@ import { useAuth } from "./useAuth";
 import { getSocket } from "../lib/socket";
 import { ChatThread } from "../types/chat";
 
+type AiThreadResponse = {
+  thread?: {
+    _id: string;
+    unreadCount?: number;
+    lastMessage?: string;
+    lastMessageAt?: string;
+    title?: string;
+  };
+};
+
 export function useChatUnread() {
   const { token, user } = useAuth() as any;
   const [threads, setThreads] = useState<ChatThread[]>([]);
+  const [aiUnread, setAiUnread] = useState(0);
 
   const currentUserId = user?._id || user?.id || "";
+  const isAthlete = user?.role === "athlete";
 
   const loadThreads = useCallback(async () => {
     if (!user) {
       setThreads([]);
+      setAiUnread(0);
       return;
     }
 
     try {
-      const { data } = await api.get("/chat/threads");
-      setThreads(data.data ?? []);
+      const [{ data: chatData }, aiResult] = await Promise.all([
+        api.get("/chat/threads"),
+        isAthlete ? api.get("/ai/thread") : Promise.resolve(null),
+      ]);
+
+      setThreads(chatData.data ?? []);
+
+      if (isAthlete && aiResult?.data?.data) {
+        const payload = aiResult.data.data as AiThreadResponse;
+        setAiUnread(payload.thread?.unreadCount ?? 0);
+      } else {
+        setAiUnread(0);
+      }
     } catch (error) {
       console.error("Failed to load unread chat threads", error);
     }
-  }, [user]);
+  }, [user, isAthlete]);
 
   useEffect(() => {
     loadThreads();
@@ -105,14 +129,19 @@ export function useChatUnread() {
     };
   }, [user, loadThreads]);
 
-  const totalUnread = useMemo(
-    () => threads.reduce((sum, thread) => sum + (thread.unreadCount ?? 0), 0),
-    [threads]
-  );
+  const totalUnread = useMemo(() => {
+    const threadUnread = threads.reduce(
+      (sum, thread) => sum + (thread.unreadCount ?? 0),
+      0
+    );
+
+    return threadUnread + aiUnread;
+  }, [threads, aiUnread]);
 
   return {
     threads,
     totalUnread,
+    aiUnread,
     setThreads,
     refreshThreads: loadThreads,
   };
