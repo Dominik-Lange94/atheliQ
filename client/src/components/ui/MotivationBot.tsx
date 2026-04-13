@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { useAiMotivation } from "../../hooks/useAi";
+import spaqBotAvatar from "../../assets/spaq-bot-avatar.png";
 
 interface Props {
   hasData?: boolean;
@@ -106,8 +107,12 @@ export default function MotivationBot({ hasData, selectedDate }: Props) {
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-[#FFD300]/20 bg-[#FFD300]/12 text-[#FFD300] shadow-[0_0_20px_rgba(255,211,0,0.08)]">
-                ✦
+              <div className="h-10 w-10 overflow-hidden rounded-2xl border border-[#FFD300]/20 bg-[#FFD300]/10 shadow-[0_0_20px_rgba(255,211,0,0.08)]">
+                <img
+                  src={spaqBotAvatar}
+                  alt="SPAQ Bot"
+                  className="h-full w-full object-cover"
+                />
               </div>
 
               <div className="min-w-0">

@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { api } from "../../lib/api";
 import { useAuth } from "../../hooks/useAuth";
 import BrandLogo from "../../components/layout/BrandLogo";
+import SQLoadingScreen from "../../components/ui/SQLoadingScreen";
 
 type PrimaryGoal =
   | "lose_fat"
@@ -811,6 +812,7 @@ export default function OnboardingPage() {
   const [data, setData] = useState<OnboardingData>(() => loadDraft());
   const [submitting, setSubmitting] = useState(false);
   const [serverError, setServerError] = useState("");
+  const [showGenerationLoading, setShowGenerationLoading] = useState(false);
 
   const totalSteps = 10;
   const progress = ((step + 1) / totalSteps) * 100;
@@ -998,6 +1000,10 @@ export default function OnboardingPage() {
       localStorage.setItem(COMPLETED_KEY, "true");
       localStorage.removeItem(STORAGE_KEY);
 
+      setShowGenerationLoading(true);
+
+      await new Promise((resolve) => setTimeout(resolve, 5000));
+
       if (user) {
         const token = localStorage.getItem("token");
         if (token) {
@@ -1017,6 +1023,7 @@ export default function OnboardingPage() {
           error?.message ??
           "Onboarding konnte nicht gespeichert werden."
       );
+      setShowGenerationLoading(false);
     } finally {
       setSubmitting(false);
     }
@@ -1027,17 +1034,16 @@ export default function OnboardingPage() {
     if (step > 0) setStep((prev) => prev - 1);
   };
 
+  if (showGenerationLoading) {
+    return <SQLoadingScreen mode="dark" />;
+  }
+
   return (
     <div className="min-h-screen bg-app">
       <header className="border-b border-subtle px-6 py-4">
         <div className="mx-auto flex max-w-5xl items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <BrandLogo imageClassName="h-9 w-auto" />
-
-            <div>
-              <p className="font-medium text-primary">SPAQ</p>
-              <p className="text-xs text-muted">Smart onboarding</p>
-            </div>
           </div>
 
           <div className="flex items-center gap-4">
