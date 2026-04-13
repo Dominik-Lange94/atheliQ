@@ -1033,11 +1033,6 @@ export default function OnboardingPage() {
         <div className="mx-auto flex max-w-5xl items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <BrandLogo imageClassName="h-9 w-auto" />
-
-            <div>
-              <p className="font-medium text-primary">SPAQ</p>
-              <p className="text-xs text-muted">Smart onboarding</p>
-            </div>
           </div>
 
           <div className="flex items-center gap-4">
