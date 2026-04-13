@@ -1,4 +1,5 @@
 import { ChatThread } from "../../types/chat";
+import ChatAvatar from "./ChatAvatar";
 
 interface Props {
   threads: ChatThread[];
@@ -107,34 +108,43 @@ export default function ChatSidebar({
                 }`}
               >
                 <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex min-w-0 flex-wrap items-center gap-2">
-                      <p
-                        className={`truncate font-medium ${
-                          active ? "text-[#FFD300]" : "text-primary"
-                        }`}
-                      >
-                        {thread.otherUser?.name ?? "Chat"}
+                  <div className="flex min-w-0 flex-1 items-start gap-3">
+                    <ChatAvatar
+                      name={thread.otherUser?.name}
+                      avatarUrl={thread.otherUser?.avatarUrl}
+                      sizeClassName="h-11 w-11"
+                      textClassName="text-sm"
+                    />
+
+                    <div className="min-w-0 flex-1">
+                      <div className="flex min-w-0 flex-wrap items-center gap-2">
+                        <p
+                          className={`truncate font-medium ${
+                            active ? "text-[#FFD300]" : "text-primary"
+                          }`}
+                        >
+                          {thread.otherUser?.name ?? "Chat"}
+                        </p>
+
+                        {status ? (
+                          <span
+                            className={`rounded-full px-2 py-1 text-[10px] font-medium ${status.className}`}
+                          >
+                            {status.label}
+                          </span>
+                        ) : null}
+                      </div>
+
+                      <p className="mt-1 truncate text-xs text-secondary">
+                        {previewText}
                       </p>
 
-                      {status ? (
-                        <span
-                          className={`rounded-full px-2 py-1 text-[10px] font-medium ${status.className}`}
-                        >
-                          {status.label}
-                        </span>
+                      {thread.otherUser?.email ? (
+                        <p className="mt-1 truncate text-[11px] text-muted">
+                          {thread.otherUser.email}
+                        </p>
                       ) : null}
                     </div>
-
-                    <p className="mt-1 truncate text-xs text-secondary">
-                      {previewText}
-                    </p>
-
-                    {thread.otherUser?.email ? (
-                      <p className="mt-1 truncate text-[11px] text-muted">
-                        {thread.otherUser.email}
-                      </p>
-                    ) : null}
                   </div>
 
                   <div className="flex shrink-0 flex-col items-end gap-2">

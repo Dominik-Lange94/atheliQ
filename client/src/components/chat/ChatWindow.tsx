@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { ChatMessage, ChatThread } from "../../types/chat";
 import MessageBubble from "./MessageBubble";
+import ChatAvatar from "./ChatAvatar";
 
 interface Props {
   thread: ChatThread | null;
@@ -117,6 +118,13 @@ export default function ChatWindow({
             </svg>
           </button>
         ) : null}
+
+        <ChatAvatar
+          name={thread.otherUser?.name}
+          avatarUrl={thread.otherUser?.avatarUrl}
+          sizeClassName="h-11 w-11"
+          textClassName="text-sm"
+        />
 
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">

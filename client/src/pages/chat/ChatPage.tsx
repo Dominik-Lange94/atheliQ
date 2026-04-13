@@ -11,6 +11,7 @@ import {
 import ChatSidebar from "../../components/chat/ChatSidebar";
 import ChatWindow from "../../components/chat/ChatWindow";
 import BrandLogo from "../../components/layout/BrandLogo";
+import spaqBotAvatar from "../../assets/spaq-bot-avatar.png";
 
 const AI_THREAD_ID = "SPAQ-bot";
 
@@ -55,6 +56,7 @@ function buildAiThread(data?: AiThreadResponse | null): UiChatThread | null {
       name: data.thread.title || "SPAQ Bot",
       email: "Lokaler KI-Assistent",
       role: "coach",
+      avatarUrl: spaqBotAvatar,
     },
     isAssistantThread: true,
   };

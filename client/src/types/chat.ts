@@ -12,6 +12,15 @@ export interface ChatOtherUser {
   name: string;
   email: string;
   role: "coach" | "athlete";
+  avatarUrl?: string;
+}
+
+export interface ChatOtherUser {
+  _id: string;
+  name: string;
+  email: string;
+  role: "coach" | "athlete";
+  avatarUrl?: string;
 }
 
 export interface ChatThread {
@@ -19,13 +28,13 @@ export interface ChatThread {
   coachId: string;
   athleteId: string;
   relationId: string;
+  relationStatus?: "pending" | "active" | "revoked";
   lastMessage?: string;
   lastMessageAt?: string;
   unreadCount?: number;
   createdAt?: string;
   updatedAt?: string;
   otherUser?: ChatOtherUser;
-  relationStatus?: ChatRelationStatus;
 }
 
 export interface ChatMessageMeta {
