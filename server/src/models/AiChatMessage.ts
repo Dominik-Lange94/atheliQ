@@ -28,7 +28,17 @@ const AiChatMessageSchema = new Schema(
       model: { type: String, default: "" },
       kind: {
         type: String,
-        enum: ["chat", "motivation", "insight"],
+        enum: [
+          "chat",
+          "motivation",
+          "insight",
+          "daily_review",
+          "progress_review",
+          "long_term_review",
+          "goal_review",
+          "consistency_review",
+          "general",
+        ],
         default: "chat",
       },
       isOnboardingWelcome: {
