@@ -12,6 +12,7 @@ import {
 } from "recharts";
 import { useCardEntries } from "../../hooks/useStats";
 import { useTheme } from "../../hooks/useTheme";
+import { Link } from "react-router-dom";
 
 interface Card {
   _id: string;
@@ -301,6 +302,26 @@ export default function MainChart({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          <Link
+            to="/athlete/analyze"
+            className="flex h-9 w-9 items-center justify-center rounded-lg border border-subtle bg-surface-2 text-secondary transition-all hover:border-strong hover:text-primary"
+            title="Analyse-Dashboard öffnen"
+          >
+            <svg
+              className="h-4 w-4"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={1.7}
+                d="M3 3v18h18M7 14l3-3 3 2 4-6"
+              />
+            </svg>
+          </Link>
+
           {isWeightCard && (
             <div className="flex items-center gap-1 rounded-lg border border-subtle bg-surface-2 p-1">
               <button

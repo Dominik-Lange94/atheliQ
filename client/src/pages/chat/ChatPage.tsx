@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../../hooks/useAuth";
 import { api } from "../../lib/api";
 import { getSocket } from "../../lib/socket";
@@ -11,6 +11,9 @@ import {
 import ChatSidebar from "../../components/chat/ChatSidebar";
 import ChatWindow from "../../components/chat/ChatWindow";
 import BrandLogo from "../../components/layout/BrandLogo";
+import ThemeToggle from "../../components/layout/ThemeToggle";
+import MobileConnectModal from "../../components/auth/MobileConnectModal";
+import CoachesPage from "../athlete/CoachesPage";
 import spaqBotAvatar from "../../assets/spaq-bot-avatar.png";
 
 const AI_THREAD_ID = "SPAQ-bot";
@@ -62,6 +65,17 @@ function buildAiThread(data?: AiThreadResponse | null): UiChatThread | null {
   };
 }
 
+function getInitials(name?: string) {
+  if (!name) return "?";
+
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+
+  if (parts.length === 0) return "?";
+  if (parts.length === 1) return parts[0].slice(0, 1).toUpperCase();
+
+  return `${parts[0][0] ?? ""}${parts[1][0] ?? ""}`.toUpperCase();
+}
+
 export default function ChatPage() {
   const navigate = useNavigate();
   const { user, token } = useAuth() as any;
@@ -80,6 +94,10 @@ export default function ChatPage() {
   const [aiThread, setAiThread] = useState<UiChatThread | null>(null);
   const [aiMessages, setAiMessages] = useState<ChatMessage[]>([]);
   const [aiEnabled, setAiEnabled] = useState(false);
+  const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const [showMobileConnect, setShowMobileConnect] = useState(false);
+  const [showCoaches, setShowCoaches] = useState(false);
+  const profileMenuRef = useRef<HTMLDivElement | null>(null);
 
   const currentUserId = user?._id || user?.id || "";
   const currentUserRole = user?.role as "coach" | "athlete" | undefined;
@@ -92,6 +110,25 @@ export default function ChatPage() {
   useEffect(() => {
     activeThreadIdRef.current = activeThread?._id ?? null;
   }, [activeThread?._id]);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (
+        profileMenuRef.current &&
+        !profileMenuRef.current.contains(event.target as Node)
+      ) {
+        setShowProfileMenu(false);
+      }
+    }
+
+    if (showProfileMenu) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [showProfileMenu]);
 
   const notifyGlobalChatRefresh = () => {
     window.dispatchEvent(new Event("chat:threads:refresh"));
@@ -703,6 +740,12 @@ export default function ChatPage() {
     navigate(user?.role === "coach" ? "/coach" : "/athlete");
   };
 
+  const logout = (useAuth() as any).logout;
+
+  if (showCoaches && currentUserRole === "athlete") {
+    return <CoachesPage onClose={() => setShowCoaches(false)} />;
+  }
+
   return (
     <div className="min-h-screen flex flex-col bg-app">
       <header className="flex shrink-0 items-center justify-between border-b border-subtle px-6 py-4">
@@ -730,10 +773,156 @@ export default function ChatPage() {
           <BrandLogo imageClassName="h-8 w-auto" />
         </div>
 
-        <div className="flex items-center gap-3">
-          <span className="hidden text-sm text-muted sm:block">
-            {user?.name}
-          </span>
+        <div className="flex items-center gap-2">
+          <div className="relative" ref={profileMenuRef}>
+            <button
+              onClick={() => setShowProfileMenu((v) => !v)}
+              className="flex h-11 w-11 items-center justify-center rounded-2xl border border-subtle bg-surface transition-all hover:border-strong hover:bg-surface-2"
+              title="Profilmenü"
+            >
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#FFD300] text-sm font-bold text-[#0f0f13]">
+                {getInitials(user?.name)}
+              </div>
+            </button>
+
+            {showProfileMenu && (
+              <div className="absolute right-0 top-full z-50 mt-2 w-64 overflow-hidden rounded-2xl border border-subtle bg-surface shadow-2xl shadow-black/30">
+                <div className="border-b border-subtle px-4 py-4">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#FFD300] text-sm font-bold text-[#0f0f13]">
+                      {getInitials(user?.name)}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="truncate font-medium text-primary">
+                        {user?.name}
+                      </p>
+                      <p className="truncate text-xs text-muted">
+                        {user?.email}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="p-2">
+                  {currentUserRole === "athlete" && (
+                    <>
+                      <Link
+                        to="/athlete/settings/profile"
+                        onClick={() => setShowProfileMenu(false)}
+                        className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-secondary transition-all hover:bg-surface-2 hover:text-primary"
+                      >
+                        <svg
+                          className="h-4 w-4"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={1.7}
+                            d="M5.121 17.804A9 9 0 1118.88 17.804M15 11a3 3 0 11-6 0 3 3 0 016 0z"
+                          />
+                        </svg>
+                        Profil
+                      </Link>
+
+                      <button
+                        onClick={() => {
+                          setShowProfileMenu(false);
+                          setShowCoaches(true);
+                        }}
+                        className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-secondary transition-all hover:bg-surface-2 hover:text-primary"
+                      >
+                        <svg
+                          className="h-4 w-4"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={1.6}
+                            d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"
+                          />
+                        </svg>
+                        Coaches
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          setShowProfileMenu(false);
+                          setShowMobileConnect(true);
+                        }}
+                        className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-secondary transition-all hover:bg-surface-2 hover:text-primary"
+                      >
+                        <svg
+                          className="h-4 w-4"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={1.7}
+                            d="M12 18h.01M8 4h8a2 2 0 012 2v12a2 2 0 01-2 2H8a2 2 0 01-2-2V6a2 2 0 012-2z"
+                          />
+                        </svg>
+                        Mobile verbinden
+                      </button>
+
+                      <div className="my-2 h-px bg-[var(--border-subtle)]" />
+                    </>
+                  )}
+
+                  <div className="flex items-center justify-between rounded-xl px-3 py-2.5">
+                    <div className="flex items-center gap-3 text-sm text-secondary">
+                      <svg
+                        className="h-4 w-4"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={1.7}
+                          d="M12 3v1m0 16v1m8.66-10h-1M4.34 12h-1m15.02 6.02l-.7-.7M6.34 6.34l-.7-.7m12.02 0l-.7.7M6.34 17.66l-.7.7M12 7a5 5 0 100 10 5 5 0 000-10z"
+                        />
+                      </svg>
+                      Design
+                    </div>
+
+                    <ThemeToggle />
+                  </div>
+
+                  <div className="my-2 h-px bg-[var(--border-subtle)]" />
+
+                  <button
+                    onClick={logout}
+                    className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-rose-500 transition-all hover:bg-rose-500/10"
+                  >
+                    <svg
+                      className="h-4 w-4"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={1.7}
+                        d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a2 2 0 01-2 2H6a2 2 0 01-2-2V7a2 2 0 012-2h5a2 2 0 012 2v1"
+                      />
+                    </svg>
+                    Abmelden
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </header>
 
@@ -882,6 +1071,9 @@ export default function ChatPage() {
           </div>
         </div>
       </main>
+      {showMobileConnect && currentUserRole === "athlete" && (
+        <MobileConnectModal onClose={() => setShowMobileConnect(false)} />
+      )}
     </div>
   );
 }

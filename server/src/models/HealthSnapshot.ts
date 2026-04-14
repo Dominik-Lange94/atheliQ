@@ -2,10 +2,15 @@ import mongoose, { Schema, InferSchemaType } from "mongoose";
 
 const WorkoutSchema = new Schema(
   {
-    exerciseType: { type: String, default: "WORKOUT" },
-    startTime: { type: Date },
-    endTime: { type: Date },
-    durationMinutes: { type: Number, default: 0 },
+    exerciseType: {
+      type: String,
+      default: "WORKOUT",
+      trim: true,
+      maxlength: 100,
+    },
+    startTime: { type: Date, default: null },
+    endTime: { type: Date, default: null },
+    durationMinutes: { type: Number, default: 0, min: 0 },
   },
   { _id: false }
 );
@@ -22,26 +27,42 @@ const HealthSnapshotSchema = new Schema(
       type: String,
       required: true,
       index: true,
+      match: /^\d{4}-\d{2}-\d{2}$/,
     },
     source: {
       type: String,
       required: true,
+      enum: ["health_connect"],
       default: "health_connect",
     },
-    steps: { type: Number, default: null },
-    sleepMinutes: { type: Number, default: null },
-    heartRateAvg: { type: Number, default: null },
-    heartRateMin: { type: Number, default: null },
-    heartRateMax: { type: Number, default: null },
-    caloriesActive: { type: Number, default: null },
-    caloriesTotal: { type: Number, default: null },
-    distanceMeters: { type: Number, default: null },
+
+    steps: { type: Number, default: null, min: 0 },
+    sleepMinutes: { type: Number, default: null, min: 0 },
+    heartRateAvg: { type: Number, default: null, min: 0 },
+    heartRateMin: { type: Number, default: null, min: 0 },
+    heartRateMax: { type: Number, default: null, min: 0 },
+    caloriesActive: { type: Number, default: null, min: 0 },
+    caloriesTotal: { type: Number, default: null, min: 0 },
+    distanceMeters: { type: Number, default: null, min: 0 },
+
     workouts: {
       type: [WorkoutSchema],
       default: [],
     },
-    recordedAt: { type: Date, required: true },
-    lastSyncedAt: { type: Date, required: true, default: Date.now },
+
+    sourceCapturedAt: {
+      type: Date,
+      required: true,
+    },
+    lastSyncedAt: {
+      type: Date,
+      required: true,
+      default: Date.now,
+    },
+    isTodayPreview: {
+      type: Boolean,
+      default: false,
+    },
   },
   { timestamps: true }
 );

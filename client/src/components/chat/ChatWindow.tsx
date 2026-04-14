@@ -74,6 +74,13 @@ export default function ChatWindow({
     setText("");
   };
 
+  const handleKeyDown = async (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      await handleSubmit(e as unknown as FormEvent);
+    }
+  };
+
   if (!thread) {
     return (
       <section className="flex min-h-[600px] flex-1 items-center justify-center rounded-2xl border border-subtle bg-surface">
@@ -194,6 +201,7 @@ export default function ChatWindow({
         <textarea
           value={text}
           onChange={(e) => setText(e.target.value)}
+          onKeyDown={handleKeyDown}
           rows={2}
           placeholder={composerPlaceholder}
           disabled={disableComposer || isSending}
