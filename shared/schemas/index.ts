@@ -174,6 +174,15 @@ export const ChatMessageTypeSchema = z.enum([
 
 export type ChatMessageType = z.infer<typeof ChatMessageTypeSchema>;
 
+export const ChatAttachmentSchema = z.object({
+  url: z.string().min(1),
+  filename: z.string().min(1).max(200),
+  mimeType: z.string().min(1).max(120),
+  size: z.number().nonnegative(),
+});
+
+export type ChatAttachment = z.infer<typeof ChatAttachmentSchema>;
+
 export const ChatMessageMetaSchema = z.object({
   type: ChatMessageTypeSchema.default("user"),
   actionRequired: z.boolean().optional(),
@@ -191,8 +200,6 @@ export const ChatThreadSchema = z.object({
   lastMessageAt: z.string().optional(),
   createdAt: z.string().optional(),
   updatedAt: z.string().optional(),
-
-  // kommt aus /api/chat/threads
   relationStatus: ChatRelationStatusSchema.optional(),
   unreadCount: z.number().optional(),
   otherUser: UserSchema.partial().optional(),
@@ -209,14 +216,24 @@ export const ChatMessageSchema = z.object({
   readAt: z.string().nullable().optional(),
   createdAt: z.string().optional(),
   updatedAt: z.string().optional(),
+  attachments: z.array(ChatAttachmentSchema).optional().default([]),
   meta: ChatMessageMetaSchema.optional(),
 });
 
 export type ChatMessage = z.infer<typeof ChatMessageSchema>;
 
-export const SendChatMessageSchema = z.object({
-  text: z.string().min(1, "Message is required").max(2000, "Message too long"),
-});
+export const SendChatMessageSchema = z
+  .object({
+    text: z.string().trim().max(2000, "Message too long").optional(),
+    attachments: z.array(ChatAttachmentSchema).max(3).optional().default([]),
+  })
+  .refine(
+    (data) =>
+      (data.text?.trim()?.length ?? 0) > 0 || data.attachments.length > 0,
+    {
+      message: "Message or attachment is required",
+    }
+  );
 
 export type SendChatMessageInput = z.infer<typeof SendChatMessageSchema>;
 

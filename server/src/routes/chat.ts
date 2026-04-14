@@ -1,5 +1,9 @@
-import { Router, Response } from "express";
+import { Router, Response, Request } from "express";
 import mongoose from "mongoose";
+import path from "path";
+import fs from "fs";
+import multer from "multer";
+
 import { authenticate, AuthRequest } from "../middleware/auth";
 import CoachAthlete from "../models/CoachAthlete";
 import ChatThread from "../models/ChatThread";
@@ -9,13 +13,75 @@ import { SendChatMessageSchema } from "@shared/schemas";
 const router = Router();
 router.use(authenticate);
 
+// ─────────────────────────────────────────────────────────────
+// Upload setup
+// ─────────────────────────────────────────────────────────────
+
+const uploadDir = path.join(process.cwd(), "uploads", "chat");
+
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+}
+
+const storage = multer.diskStorage({
+  destination: (_req, _file, cb) => {
+    cb(null, uploadDir);
+  },
+  filename: (_req, file, cb) => {
+    const safeBaseName = file.originalname
+      .replace(/\.[^/.]+$/, "")
+      .replace(/[^a-zA-Z0-9-_]/g, "_")
+      .slice(0, 80);
+
+    const ext = path.extname(file.originalname).toLowerCase() || ".pdf";
+    const uniqueName = `${Date.now()}-${Math.round(
+      Math.random() * 1e9
+    )}-${safeBaseName}${ext}`;
+
+    cb(null, uniqueName);
+  },
+});
+
+const upload = multer({
+  storage,
+  limits: {
+    fileSize: 5 * 1024 * 1024,
+  },
+  fileFilter: (_req, file, cb) => {
+    if (file.mimetype !== "application/pdf") {
+      cb(new Error("Nur PDF-Dateien sind erlaubt"));
+      return;
+    }
+
+    cb(null, true);
+  },
+});
+
 type RelationStatus = "pending" | "active" | "revoked";
 
-async function getAccessibleRelation(
-  userId: string,
-  role: string,
-  threadId?: string
-) {
+type ChatAttachment = {
+  url: string;
+  filename: string;
+  mimeType: string;
+  size: number;
+};
+
+type SystemMessageMeta = {
+  type:
+    | "user"
+    | "connect_request"
+    | "connect_accepted"
+    | "connect_declined"
+    | "permission_update";
+  actionRequired?: boolean;
+  metricIds?: mongoose.Types.ObjectId[] | string[];
+};
+
+// ─────────────────────────────────────────────────────────────
+// Helpers
+// ─────────────────────────────────────────────────────────────
+
+async function getAccessibleRelation(userId: string, threadId?: string) {
   if (!threadId || !mongoose.Types.ObjectId.isValid(threadId)) return null;
 
   const thread = await ChatThread.findById(threadId);
@@ -65,34 +131,82 @@ async function pushSystemMessage(params: {
   senderId: mongoose.Types.ObjectId | string;
   receiverId: mongoose.Types.ObjectId | string;
   text: string;
-  meta: {
-    type:
-      | "user"
-      | "connect_request"
-      | "connect_accepted"
-      | "connect_declined"
-      | "permission_update";
-    actionRequired?: boolean;
-    metricIds?: mongoose.Types.ObjectId[] | string[];
-  };
+  attachments?: ChatAttachment[];
+  meta: SystemMessageMeta;
 }) {
   const message = await ChatMessage.create({
     threadId: params.threadId,
     senderId: params.senderId,
     receiverId: params.receiverId,
     text: params.text,
+    attachments: params.attachments ?? [],
     meta: params.meta,
   });
 
   await ChatThread.findByIdAndUpdate(params.threadId, {
-    lastMessage: params.text,
+    lastMessage:
+      params.text?.trim() ||
+      (params.attachments?.length
+        ? `📎 ${params.attachments[0].filename}`
+        : ""),
     lastMessageAt: message.createdAt ?? new Date(),
   });
 
   return message;
 }
 
+// ─────────────────────────────────────────────────────────────
+// POST /api/chat/uploads
+// ─────────────────────────────────────────────────────────────
+
+router.post("/uploads", (req: Request, res: Response) => {
+  upload.single("file")(req, res, async (err: any) => {
+    try {
+      if (err) {
+        res.status(400).json({
+          success: false,
+          error:
+            err.message ||
+            "Upload fehlgeschlagen. Bitte nur PDFs bis 5 MB hochladen.",
+        });
+        return;
+      }
+
+      const fileReq = req as Request & { file?: Express.Multer.File };
+
+      if (!fileReq.file) {
+        res.status(400).json({
+          success: false,
+          error: "Keine Datei hochgeladen",
+        });
+        return;
+      }
+
+      const fileUrl = `/uploads/chat/${fileReq.file.filename}`;
+
+      res.status(201).json({
+        success: true,
+        data: {
+          url: fileUrl,
+          filename: fileReq.file.originalname,
+          mimeType: fileReq.file.mimetype,
+          size: fileReq.file.size,
+        },
+      });
+    } catch (error) {
+      console.error("chat upload error:", error);
+      res.status(500).json({
+        success: false,
+        error: "Upload fehlgeschlagen",
+      });
+    }
+  });
+});
+
+// ─────────────────────────────────────────────────────────────
 // GET /api/chat/threads
+// ─────────────────────────────────────────────────────────────
+
 router.get("/threads", async (req: AuthRequest, res: Response) => {
   try {
     let relations;
@@ -174,14 +288,16 @@ router.get("/threads", async (req: AuthRequest, res: Response) => {
   }
 });
 
+// ─────────────────────────────────────────────────────────────
 // GET /api/chat/threads/:threadId/messages
+// ─────────────────────────────────────────────────────────────
+
 router.get(
   "/threads/:threadId/messages",
   async (req: AuthRequest, res: Response) => {
     try {
       const access = await getAccessibleRelation(
         req.user!.userId,
-        req.user!.role,
         req.params.threadId
       );
 
@@ -210,11 +326,15 @@ router.get(
   }
 );
 
+// ─────────────────────────────────────────────────────────────
 // POST /api/chat/threads/:threadId/messages
+// ─────────────────────────────────────────────────────────────
+
 router.post(
   "/threads/:threadId/messages",
   async (req: AuthRequest, res: Response) => {
     const parsed = SendChatMessageSchema.safeParse(req.body);
+
     if (!parsed.success) {
       res.status(400).json({ success: false, error: parsed.error.flatten() });
       return;
@@ -223,7 +343,6 @@ router.post(
     try {
       const access = await getAccessibleRelation(
         req.user!.userId,
-        req.user!.role,
         req.params.threadId
       );
 
@@ -245,17 +364,36 @@ router.post(
         ? access.thread.athleteId.toString()
         : access.thread.coachId.toString();
 
+      const text = (parsed.data.text ?? "").trim();
+
+      const attachments = ((parsed.data as any).attachments ?? []).filter(
+        (attachment: ChatAttachment) =>
+          attachment.mimeType === "application/pdf" &&
+          attachment.url.startsWith("/uploads/chat/") &&
+          attachment.size <= 5 * 1024 * 1024
+      ) as ChatAttachment[];
+
+      if (!text && attachments.length === 0) {
+        res.status(400).json({
+          success: false,
+          error: "Nachricht oder PDF ist erforderlich",
+        });
+        return;
+      }
+
       const message = await ChatMessage.create({
         threadId: access.thread._id,
         senderId: req.user!.userId,
         receiverId,
-        text: parsed.data.text.trim(),
+        text,
+        attachments,
         meta: {
           type: "user",
         },
       });
 
-      access.thread.lastMessage = message.text;
+      access.thread.lastMessage =
+        text || (attachments.length ? `📎 ${attachments[0].filename}` : "");
       access.thread.lastMessageAt = message.createdAt;
       await access.thread.save();
 
@@ -267,14 +405,16 @@ router.post(
   }
 );
 
+// ─────────────────────────────────────────────────────────────
 // POST /api/chat/threads/:threadId/accept
+// ─────────────────────────────────────────────────────────────
+
 router.post(
   "/threads/:threadId/accept",
   async (req: AuthRequest, res: Response) => {
     try {
       const access = await getAccessibleRelation(
         req.user!.userId,
-        req.user!.role,
         req.params.threadId
       );
 
@@ -327,14 +467,16 @@ router.post(
   }
 );
 
+// ─────────────────────────────────────────────────────────────
 // POST /api/chat/threads/:threadId/decline
+// ─────────────────────────────────────────────────────────────
+
 router.post(
   "/threads/:threadId/decline",
   async (req: AuthRequest, res: Response) => {
     try {
       const access = await getAccessibleRelation(
         req.user!.userId,
-        req.user!.role,
         req.params.threadId
       );
 
@@ -387,14 +529,16 @@ router.post(
   }
 );
 
+// ─────────────────────────────────────────────────────────────
 // POST /api/chat/threads/:threadId/read
+// ─────────────────────────────────────────────────────────────
+
 router.post(
   "/threads/:threadId/read",
   async (req: AuthRequest, res: Response) => {
     try {
       const access = await getAccessibleRelation(
         req.user!.userId,
-        req.user!.role,
         req.params.threadId
       );
 
