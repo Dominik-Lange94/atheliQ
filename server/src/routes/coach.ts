@@ -117,7 +117,11 @@ router.get(
       if (from || to) {
         filter.recordedAt = {};
         if (from) filter.recordedAt.$gte = new Date(from as string);
-        if (to) filter.recordedAt.$lte = new Date(to as string);
+        if (to) {
+          const end = new Date(to as string);
+          end.setHours(23, 59, 59, 999);
+          filter.recordedAt.$lte = end;
+        }
       }
 
       const limit = from || to ? 500 : 90;

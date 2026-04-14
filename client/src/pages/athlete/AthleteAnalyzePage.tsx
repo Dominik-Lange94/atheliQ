@@ -471,22 +471,63 @@ function AnalyzeMetricCard({
               />
 
               <Tooltip
-                contentStyle={{
-                  background: chartUi.tooltipBg,
-                  border: `1px solid ${chartUi.tooltipBorder}`,
-                  borderRadius: "12px",
-                  color: chartUi.tooltipText,
-                  fontSize: "13px",
-                }}
-                formatter={(v: any, name: any, props: any) => {
-                  if (name === "trend") return [`${v} ${displayUnit}`, "Trend"];
+                content={({ payload, label }) => {
+                  if (!payload || !payload.length) return null;
 
-                  return [
-                    <span style={{ color: cardColor }}>
-                      {props.payload._real} {displayUnit}
-                    </span>,
-                    stripEmoji(card.label),
-                  ];
+                  const valueItem = payload.find((p) => p.dataKey === "value");
+                  const trendItem = payload.find((p) => p.dataKey === "trend");
+
+                  const value = valueItem?.payload?._real;
+                  const trend = trendItem?.value;
+
+                  // 🔥 Goal Logic
+                  let missing = null;
+                  if (
+                    goalActive &&
+                    typeof goalValue === "number" &&
+                    typeof value === "number"
+                  ) {
+                    if (goalDirection === "gain" || goalDirection === "min") {
+                      missing = Math.max(0, goalValue - value);
+                    } else {
+                      missing = Math.max(0, value - goalValue);
+                    }
+                  }
+
+                  return (
+                    <div
+                      style={{
+                        background: chartUi.tooltipBg,
+                        border: `1px solid ${chartUi.tooltipBorder}`,
+                        borderRadius: "12px",
+                        padding: "10px 12px",
+                        fontSize: "13px",
+                        color: chartUi.tooltipText,
+                      }}
+                    >
+                      <div style={{ marginBottom: 4, opacity: 0.7 }}>
+                        {label}
+                      </div>
+
+                      <div style={{ color: cardColor, fontWeight: 600 }}>
+                        {value} {displayUnit}
+                      </div>
+
+                      {goalActive &&
+                        typeof goalValue === "number" &&
+                        missing !== null && (
+                          <div style={{ fontSize: 12, opacity: 0.8 }}>
+                            Noch {missing} {displayUnit} bis Ziel
+                          </div>
+                        )}
+
+                      {trend !== undefined && (
+                        <div style={{ fontSize: 12, opacity: 0.6 }}>
+                          Trend: {trend} {displayUnit}
+                        </div>
+                      )}
+                    </div>
+                  );
                 }}
               />
 

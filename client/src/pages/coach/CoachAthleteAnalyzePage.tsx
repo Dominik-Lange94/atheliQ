@@ -248,6 +248,14 @@ function AnalyzeMetricCard({
     : null;
 
   const trend = calculateTrendLabel(firstVal, lastVal);
+  const insight = getInsight(card, trend, goalActive, goalValue, lastVal);
+
+  const insightColorClass =
+    insight?.color === "emerald"
+      ? "text-emerald-500"
+      : insight?.color === "rose"
+      ? "text-rose-500"
+      : "text-muted";
 
   const trendValues = movingAverage(
     rawData.map((d) => d.value),
@@ -293,9 +301,17 @@ function AnalyzeMetricCard({
                 className="inline-block h-2.5 w-2.5 rounded-full"
                 style={{ backgroundColor: cardColor }}
               />
-              <h3 className="truncate text-base font-semibold text-primary">
-                {stripEmoji(card.label)}
-              </h3>
+              <div className="flex items-center gap-2">
+                <h3 className="truncate text-base font-semibold text-primary">
+                  {stripEmoji(card.label)}
+                </h3>
+
+                {insight && (
+                  <span className={`text-xs font-medium ${insightColorClass}`}>
+                    {insight.text}
+                  </span>
+                )}
+              </div>
             </div>
 
             <p className="mt-1 text-xs text-muted">
@@ -425,22 +441,63 @@ function AnalyzeMetricCard({
               />
 
               <Tooltip
-                contentStyle={{
-                  background: chartUi.tooltipBg,
-                  border: `1px solid ${chartUi.tooltipBorder}`,
-                  borderRadius: "12px",
-                  color: chartUi.tooltipText,
-                  fontSize: "13px",
-                }}
-                formatter={(v: any, name: any, props: any) => {
-                  if (name === "trend") return [`${v} ${displayUnit}`, "Trend"];
+                content={({ payload, label }) => {
+                  if (!payload || !payload.length) return null;
 
-                  return [
-                    <span style={{ color: cardColor }}>
-                      {props.payload._real} {displayUnit}
-                    </span>,
-                    stripEmoji(card.label),
-                  ];
+                  const valueItem = payload.find((p) => p.dataKey === "value");
+                  const trendItem = payload.find((p) => p.dataKey === "trend");
+
+                  const value = valueItem?.payload?._real;
+                  const trend = trendItem?.value;
+
+                  let missing = null;
+
+                  if (
+                    goalActive &&
+                    typeof goalValue === "number" &&
+                    typeof value === "number"
+                  ) {
+                    if (goalDirection === "gain" || goalDirection === "min") {
+                      missing = Math.max(0, goalValue - value);
+                    } else {
+                      missing = Math.max(0, value - goalValue);
+                    }
+                  }
+
+                  return (
+                    <div
+                      style={{
+                        background: chartUi.tooltipBg,
+                        border: `1px solid ${chartUi.tooltipBorder}`,
+                        borderRadius: "12px",
+                        padding: "10px 12px",
+                        fontSize: "13px",
+                        color: chartUi.tooltipText,
+                      }}
+                    >
+                      <div style={{ marginBottom: 4, opacity: 0.7 }}>
+                        {label}
+                      </div>
+
+                      <div style={{ color: cardColor, fontWeight: 600 }}>
+                        {value} {displayUnit}
+                      </div>
+
+                      {goalActive &&
+                        typeof goalValue === "number" &&
+                        missing !== null && (
+                          <div style={{ fontSize: 12, opacity: 0.8 }}>
+                            Noch {missing} {displayUnit} bis Ziel
+                          </div>
+                        )}
+
+                      {trend !== undefined && (
+                        <div style={{ fontSize: 12, opacity: 0.6 }}>
+                          Trend: {trend} {displayUnit}
+                        </div>
+                      )}
+                    </div>
+                  );
                 }}
               />
 
@@ -528,12 +585,36 @@ function AnalyzeMetricCard({
   );
 }
 
+function getInsight(
+  card: any,
+  trend: any,
+  goalActive: boolean,
+  goalValue: number | null,
+  lastVal: number | null
+) {
+  if (!lastVal) return null;
+
+  if (goalActive && goalValue != null) {
+    const reached =
+      card.goalDirection === "gain" || card.goalDirection === "min"
+        ? lastVal >= goalValue
+        : lastVal <= goalValue;
+
+    if (reached) return { text: "Ziel erreicht", color: "emerald" };
+  }
+
+  if (trend.direction === "up")
+    return { text: "Verbesserung", color: "emerald" };
+  if (trend.direction === "down") return { text: "Rückgang", color: "rose" };
+
+  return { text: "Stabil", color: "gray" };
+}
+
 export default function CoachAthleteAnalyzePage() {
   const navigate = useNavigate();
   const { athleteId } = useParams<{ athleteId: string }>();
   const { user } = useAuth();
   const { resolvedTheme } = useTheme();
-
   const { data: relations = [] } = useCoachAthletes(user?._id);
 
   const [timeRange, setTimeRange] = useState<TimeRangeKey>("1M");
