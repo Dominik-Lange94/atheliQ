@@ -131,3 +131,20 @@ body {
 @utility text-accent-foreground {
   color: var(--accent-foreground);
 }
+.themed-date-input {
+  color-scheme: light;
+}
+
+.dark .themed-date-input {
+  color-scheme: dark;
+}
+
+.themed-date-input::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  opacity: 0.85;
+  filter: invert(0.15);
+}
+
+.dark .themed-date-input::-webkit-calendar-picker-indicator {
+  filter: invert(0.92);
+}

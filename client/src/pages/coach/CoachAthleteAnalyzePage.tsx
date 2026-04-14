@@ -178,6 +178,11 @@ function AnalyzeMetricCard({
   const isPaceCard = card.unit === "min/km";
   const isSpeedCard = card.unit === "km/h";
 
+  const goalActive = Boolean(card.goalEnabled);
+  const goalValue = typeof card.goalValue === "number" ? card.goalValue : null;
+  const goalDirection =
+    card.goalDirection ?? (card.type === "weight" ? "lose" : "min");
+
   const chartUi = useMemo(() => {
     if (resolvedTheme === "dark") {
       return {
@@ -254,6 +259,30 @@ function AnalyzeMetricCard({
     trend: trendValues[i],
   }));
 
+  const goalMet =
+    goalActive && typeof goalValue === "number"
+      ? rawData.filter((d) => {
+          if (goalDirection === "gain" || goalDirection === "min") {
+            return d._real >= goalValue;
+          }
+          return d._real <= goalValue;
+        }).length
+      : 0;
+
+  const goalPct =
+    goalActive && rawData.length > 0
+      ? Math.round((goalMet / rawData.length) * 100)
+      : 0;
+
+  const goalDirectionLabel =
+    goalDirection === "lose"
+      ? "Abnehmen"
+      : goalDirection === "gain"
+      ? "Zunehmen"
+      : goalDirection === "max"
+      ? "Obergrenze"
+      : "Mindestziel";
+
   return (
     <div className="overflow-hidden rounded-3xl border border-subtle bg-surface">
       <div className="border-b border-subtle px-4 py-4 sm:px-5">
@@ -283,6 +312,11 @@ function AnalyzeMetricCard({
                 ? `${latestValue} ${displayUnit}`
                 : "—"}
             </p>
+            {goalActive && typeof goalValue === "number" && (
+              <p className="mt-1 text-[10px] text-[#c99700] dark:text-[#FFD300]/80">
+                Ziel: {goalValue} {displayUnit}
+              </p>
+            )}
           </div>
         </div>
       </div>
@@ -332,18 +366,31 @@ function AnalyzeMetricCard({
 
         <div className="rounded-2xl border border-subtle bg-surface-2 p-3">
           <p className="text-[10px] uppercase tracking-[0.16em] text-muted">
-            Min / Max
+            {goalActive ? "Zielstatus" : "Min / Max"}
           </p>
-          <p className="mt-1 text-sm font-semibold text-primary">
-            {typeof minVal === "number" ? minVal : "—"} /{" "}
-            {typeof maxVal === "number" ? maxVal : "—"}
-          </p>
-          <p className="mt-1 text-xs text-muted">
-            Letzter Eintrag:{" "}
-            {rawData.length
-              ? formatCompactDate(rawData[rawData.length - 1]?.recordedAt)
-              : "—"}
-          </p>
+          {goalActive && typeof goalValue === "number" ? (
+            <>
+              <p className="mt-1 text-sm font-semibold text-primary">
+                {goalPct}% erreicht
+              </p>
+              <p className="mt-1 text-xs text-muted">
+                {goalMet} von {rawData.length} Einträgen · {goalDirectionLabel}
+              </p>
+            </>
+          ) : (
+            <>
+              <p className="mt-1 text-sm font-semibold text-primary">
+                {typeof minVal === "number" ? minVal : "—"} /{" "}
+                {typeof maxVal === "number" ? maxVal : "—"}
+              </p>
+              <p className="mt-1 text-xs text-muted">
+                Letzter Eintrag:{" "}
+                {rawData.length
+                  ? formatCompactDate(rawData[rawData.length - 1]?.recordedAt)
+                  : "—"}
+              </p>
+            </>
+          )}
         </div>
       </div>
 
@@ -407,6 +454,22 @@ function AnalyzeMetricCard({
                 />
               )}
 
+              {goalActive && typeof goalValue === "number" && (
+                <ReferenceLine
+                  y={goalValue}
+                  stroke="#FFD300"
+                  strokeWidth={1.5}
+                  strokeDasharray="6 3"
+                  strokeOpacity={0.9}
+                  label={{
+                    value: `Ziel: ${goalValue} ${displayUnit}`,
+                    position: "insideTopRight",
+                    fill: "#FFD300",
+                    fontSize: 10,
+                  }}
+                />
+              )}
+
               {(chartType === "bar" || chartType === "mixed") && (
                 <Bar
                   dataKey="value"
@@ -423,7 +486,27 @@ function AnalyzeMetricCard({
                   dataKey="value"
                   stroke={cardColor}
                   strokeWidth={2}
-                  dot={false}
+                  dot={
+                    goalActive && typeof goalValue === "number"
+                      ? (props: any) => {
+                          const { cx, cy, payload } = props;
+                          const met =
+                            goalDirection === "gain" || goalDirection === "min"
+                              ? payload._real >= goalValue
+                              : payload._real <= goalValue;
+
+                          return (
+                            <circle
+                              key={`dot-${cx}-${cy}`}
+                              cx={cx}
+                              cy={cy}
+                              r={3}
+                              fill={met ? "#ffffff" : cardColor}
+                            />
+                          );
+                        }
+                      : false
+                  }
                   activeDot={{ r: 5, fill: cardColor }}
                 />
               )}

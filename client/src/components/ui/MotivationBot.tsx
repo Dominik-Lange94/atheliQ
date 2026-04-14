@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useAiMotivation } from "../../hooks/useAi";
 import spaqBotAvatar from "../../assets/spaq-bot-avatar.png";
 import { useTheme } from "../../hooks/useTheme";
@@ -14,67 +15,206 @@ type MotivationSection = {
   body: string;
 };
 
-function cleanAiText(input?: string): string {
+const GENERIC_LINE_PATTERNS = [
+  /^deine motivation:?$/i,
+  /^hier ist deine motivation:?$/i,
+  /^motivierende einleitung:?$/i,
+  /^konkreter datenbezug:?$/i,
+  /^nächster fokus:?$/i,
+  /^dein fokus:?$/i,
+  /^heute wichtig:?$/i,
+  /^empfehlung:?$/i,
+  /^analyse:?$/i,
+  /^motivation:?$/i,
+  /^fokus:?$/i,
+  /^datenbezug:?$/i,
+  /^fortschritt:?$/i,
+  /^spaq bot:?$/i,
+];
+
+const TITLE_ALIASES: Record<string, string> = {
+  motivation: "Motivation",
+  "motivierende einleitung": "Motivation",
+  "heute wichtig": "Motivation",
+  fokus: "Nächster Fokus",
+  "dein fokus": "Nächster Fokus",
+  "nächster fokus": "Nächster Fokus",
+  empfehlung: "Nächster Fokus",
+  analyse: "Datenbezug",
+  datenbezug: "Datenbezug",
+  fortschritt: "Datenbezug",
+  "konkreter datenbezug": "Datenbezug",
+};
+
+function normalizeWhitespace(input?: string): string {
   if (!input) return "";
 
   return input
     .replace(/\r\n/g, "\n")
+    .replace(/\t/g, " ")
     .replace(/\*\*/g, "")
-    .replace(/["“”]/g, "")
+    .replace(/#{1,6}\s*/g, "")
+    .replace(/["“”„]/g, "")
+    .replace(/[•·▪◦]/g, "-")
+    .replace(/\u00a0/g, " ")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
+}
+
+function cleanLine(line: string): string {
+  return line
+    .replace(/^\s*[-–—]\s*/, "")
+    .replace(/^(skick|sure|klar|okay|ok|gut|super)[,:]?\s*/i, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
+function isGenericLine(line: string): boolean {
+  const cleaned = cleanLine(line);
+  return GENERIC_LINE_PATTERNS.some((pattern) => pattern.test(cleaned));
+}
+
+function stripGenericIntro(text: string): string {
+  return text
+    .replace(
+      /^(heute geht es um fortschritte!?|hier ist deine motivation:?|deine motivation:?)/i,
+      ""
+    )
+    .replace(/^(wir haben uns gemeinsam ein ziel gesetzt[^.?!]*[.?!]\s*)/i, "")
+    .replace(/^(ich bin stolz darauf[^.?!]*[.?!]\s*)/i, "")
+    .replace(/^(ich bin stolz auf dich[^.?!]*[.?!]\s*)/i, "")
+    .replace(/^(gemeinsam schaffen wir das[^.?!]*[.?!]\s*)/i, "")
+    .replace(/^(du hast deine ziele noch nie[^.?!]*[.?!]\s*)/i, "")
+    .trim();
+}
+
+function cleanupBody(text: string): string {
+  const lines = text
+    .split("\n")
+    .map(cleanLine)
+    .filter(Boolean)
+    .filter((line) => !isGenericLine(line));
+
+  return stripGenericIntro(lines.join("\n").trim())
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function normalizeTitle(raw: string): string {
+  const key = raw.trim().toLowerCase();
+  return TITLE_ALIASES[key] ?? raw.trim();
+}
+
+function splitIntoParagraphs(text: string): string[] {
+  return text
+    .split(/\n\s*\n/)
+    .map((part) => cleanupBody(part))
+    .filter(Boolean);
+}
+
+function cleanAiText(input?: string): string {
+  const normalized = normalizeWhitespace(input);
+  if (!normalized) return "";
+
+  const cleanedLines = normalized
+    .split("\n")
+    .map(cleanLine)
+    .filter(Boolean)
+    .filter((line) => !isGenericLine(line));
+
+  return cleanedLines.join("\n").trim();
+}
+
+function pushSection(
+  sections: MotivationSection[],
+  title: string,
+  body: string
+) {
+  const cleanTitle = normalizeTitle(title);
+  const cleanBody = cleanupBody(body);
+
+  if (!cleanBody) return;
+
+  const existing = sections.find((section) => section.title === cleanTitle);
+
+  if (existing) {
+    existing.body = `${existing.body}\n\n${cleanBody}`.trim();
+    return;
+  }
+
+  sections.push({
+    title: cleanTitle,
+    body: cleanBody,
+  });
 }
 
 function parseMotivationSections(input?: string): MotivationSection[] {
   const text = cleanAiText(input);
   if (!text) return [];
 
-  const knownTitles = [
-    "Motivierende Einleitung",
-    "Konkreter Datenbezug",
-    "Nächster Fokus",
-    "Dein Fokus",
-    "Heute wichtig",
-    "Empfehlung",
-    "Analyse",
-  ];
+  const knownTitles = Object.keys(TITLE_ALIASES)
+    .sort((a, b) => b.length - a.length)
+    .map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
 
-  const escapedTitles = knownTitles.map((t) =>
-    t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+  const titleRegex = new RegExp(
+    `(?:^|\\n)\\s*(${knownTitles.join("|")})\\s*:?\\s*`,
+    "gi"
   );
 
-  const titleRegex = new RegExp(`(${escapedTitles.join("|")})\\s*:?\\s*`, "g");
   const matches = [...text.matchAll(titleRegex)];
 
-  if (matches.length === 0) {
-    return [
-      {
-        title: "Deine Motivation",
-        body: text,
-      },
-    ];
+  if (matches.length > 0) {
+    const sections: MotivationSection[] = [];
+
+    for (let i = 0; i < matches.length; i++) {
+      const match = matches[i];
+      const rawTitle = match[1].trim();
+      const matchStart = match.index ?? 0;
+      const titleStartInMatch = match[0]
+        .toLowerCase()
+        .lastIndexOf(rawTitle.toLowerCase());
+      const contentStart =
+        matchStart + Math.max(titleStartInMatch, 0) + rawTitle.length;
+      const end =
+        i + 1 < matches.length
+          ? matches[i + 1].index ?? text.length
+          : text.length;
+
+      const body = text.slice(contentStart, end).replace(/^:\s*/, "").trim();
+      pushSection(sections, rawTitle, body);
+    }
+
+    if (sections.length > 0) {
+      return sections.filter((section) => section.body.trim().length > 0);
+    }
   }
 
-  const sections: MotivationSection[] = [];
+  const paragraphs = splitIntoParagraphs(text);
 
-  for (let i = 0; i < matches.length; i++) {
-    const match = matches[i];
-    const title = match[1].trim();
-    const start = match.index! + match[0].length;
-    const end = i + 1 < matches.length ? matches[i + 1].index! : text.length;
-    const body = text.slice(start, end).trim();
-
-    if (body) sections.push({ title, body });
+  if (paragraphs.length >= 3) {
+    const sections: MotivationSection[] = [];
+    pushSection(sections, "Motivation", paragraphs[0]);
+    pushSection(sections, "Datenbezug", paragraphs[1]);
+    pushSection(sections, "Nächster Fokus", paragraphs.slice(2).join("\n\n"));
+    return sections;
   }
 
-  return sections.length
-    ? sections
-    : [
-        {
-          title: "Deine Motivation",
-          body: text,
-        },
-      ];
+  if (paragraphs.length === 2) {
+    const sections: MotivationSection[] = [];
+    pushSection(sections, "Motivation", paragraphs[0]);
+    pushSection(sections, "Nächster Fokus", paragraphs[1]);
+    return sections;
+  }
+
+  const fallback = cleanupBody(text);
+  if (!fallback) return [];
+
+  return [
+    {
+      title: "Motivation",
+      body: fallback,
+    },
+  ];
 }
 
 function titleToAccent(title: string) {
@@ -93,13 +233,29 @@ function titleToAccent(title: string) {
 
 export default function MotivationBot({ hasData, selectedDate }: Props) {
   const [visible, setVisible] = useState(true);
+  const navigate = useNavigate();
   const { data, isLoading, refetch, isFetching } =
     useAiMotivation(selectedDate);
 
-  const sections = useMemo(
-    () => parseMotivationSections(data?.text),
-    [data?.text]
-  );
+  const sections = useMemo(() => {
+    const structured = (data as any)?.structured;
+
+    if (structured) {
+      return [
+        structured.motivation
+          ? { title: "Motivation", body: structured.motivation }
+          : null,
+        structured.dataPoint
+          ? { title: "Datenbezug", body: structured.dataPoint }
+          : null,
+        structured.nextFocus
+          ? { title: "Nächster Fokus", body: structured.nextFocus }
+          : null,
+      ].filter(Boolean) as MotivationSection[];
+    }
+
+    return parseMotivationSections(data?.text);
+  }, [data]);
 
   const { resolvedTheme } = useTheme();
   const loaderMode = resolvedTheme === "light" ? "light" : "dark";
@@ -121,7 +277,7 @@ export default function MotivationBot({ hasData, selectedDate }: Props) {
               </div>
 
               <div className="min-w-0">
-                <h3 className="truncate text-primary font-semibold tracking-tight">
+                <h3 className="truncate font-semibold tracking-tight text-primary">
                   SPAQ Bot
                 </h3>
                 <p className="text-xs text-muted">
@@ -137,11 +293,10 @@ export default function MotivationBot({ hasData, selectedDate }: Props) {
 
           <div className="flex items-center gap-2">
             <button
-              onClick={() => refetch()}
-              disabled={isFetching}
-              className="rounded-xl border border-subtle bg-surface px-3 py-1.5 text-xs text-secondary transition hover:border-strong hover:text-primary disabled:opacity-50"
+              onClick={() => navigate("/chat")}
+              className="rounded-xl border border-subtle bg-surface px-3 py-1.5 text-xs text-secondary transition hover:border-strong hover:text-primary"
             >
-              {isFetching ? "Lädt…" : "Neu"}
+              Chat
             </button>
             <button
               onClick={() => setVisible(false)}
@@ -166,16 +321,16 @@ export default function MotivationBot({ hasData, selectedDate }: Props) {
           <div className="rounded-2xl border border-subtle bg-surface-2 p-4">
             <div className="flex flex-col items-center justify-center">
               <SQLoadingScreen compact mode={loaderMode} className="px-0" />
-              <p className="mt-2 text-sm leading-6 text-muted text-center">
+              <p className="mt-2 text-center text-sm leading-6 text-muted">
                 SPAQ erstellt gerade deine Motivation…
               </p>
             </div>
           </div>
-        ) : !data?.text ? (
+        ) : !data?.text || sections.length === 0 ? (
           <div className="rounded-2xl border border-subtle bg-surface-2 p-4">
             <p className="text-sm leading-6 text-muted">
-              Ich konnte gerade keine Motivation generieren. Prüfe bitte, ob
-              Ollama läuft.
+              Ich konnte gerade keine saubere Motivation generieren. Prüfe
+              bitte, ob Ollama läuft.
             </p>
           </div>
         ) : (

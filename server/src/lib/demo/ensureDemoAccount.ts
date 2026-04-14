@@ -176,43 +176,33 @@ function generateDemoEntries(days = 540): GeneratedEntry[] {
 
   let weight = 78.8;
   let restingHrBase = 74;
-  let runningPaceBase = 6.45; // min/km
+  let runningPaceBase = 6.45;
   let strengthBase = 12;
   let sleepDebt = 0;
 
   for (let i = 0; i < days; i++) {
     const date = startOfDayAtNoon(addDays(start, i));
     const phase = getPhase(i, days);
-    const weekday = date.getUTCDay(); // 0 = Sunday
+    const weekday = date.getUTCDay();
     const isWeekend = weekday === 0 || weekday === 6;
 
-    let activeProb = 0.82;
     let workoutProb = 0.45;
 
     if (phase === "starting") {
-      activeProb = 0.78;
       workoutProb = 0.32;
     } else if (phase === "building") {
-      activeProb = 0.86;
       workoutProb = 0.52;
     } else if (phase === "slump") {
-      activeProb = 0.65;
       workoutProb = 0.22;
     } else if (phase === "consistent") {
-      activeProb = 0.88;
       workoutProb = 0.55;
     } else if (phase === "strong") {
-      activeProb = 0.9;
       workoutProb = 0.6;
     }
 
     if (isWeekend) {
-      activeProb -= 0.04;
       workoutProb += 0.04;
     }
-
-    const hasAnyData = chance(activeProb);
-    if (!hasAnyData) continue;
 
     const sicknessWindow =
       i > Math.floor(days * 0.5) && i < Math.floor(days * 0.53);
@@ -256,7 +246,7 @@ function generateDemoEntries(days = 540): GeneratedEntry[] {
       recordedAt: date,
     });
 
-    // weight (slow trend, natural noise)
+    // weight - now daily
     let weightDelta = randomBetween(-0.08, 0.08);
     if (phase === "building") weightDelta -= 0.01;
     if (phase === "slump") weightDelta += 0.01;
@@ -267,13 +257,11 @@ function generateDemoEntries(days = 540): GeneratedEntry[] {
     weight += weightDelta;
     weight = clamp(round(weight, 1), 71.8, 80.5);
 
-    if (chance(0.82)) {
-      entries.push({
-        cardKey: "weight",
-        value: weight,
-        recordedAt: date,
-      });
-    }
+    entries.push({
+      cardKey: "weight",
+      value: weight,
+      recordedAt: date,
+    });
 
     // heart rate
     let hr =
@@ -308,7 +296,7 @@ function generateDemoEntries(days = 540): GeneratedEntry[] {
       recordedAt: date,
     });
 
-    // built-in calories card as active burn style
+    // built-in calories
     const activeCalories = Math.round(
       260 +
         steps * 0.035 +
@@ -322,11 +310,13 @@ function generateDemoEntries(days = 540): GeneratedEntry[] {
       recordedAt: date,
     });
 
-    // workout day
     const didWorkout = chance(workoutProb) && !sicknessWindow;
 
+    // workout minutes - now daily
+    let workoutMinutes = 0;
+
     if (didWorkout) {
-      let workoutMinutes = Math.round(
+      workoutMinutes = Math.round(
         randomBetween(
           phase === "starting" ? 20 : 28,
           phase === "strong" ? 78 : 62
@@ -335,103 +325,129 @@ function generateDemoEntries(days = 540): GeneratedEntry[] {
 
       if (isWeekend) workoutMinutes += 8;
       workoutMinutes = clamp(workoutMinutes, 18, 95);
+    } else {
+      workoutMinutes = sicknessWindow
+        ? Math.round(randomBetween(0, 8))
+        : Math.round(randomBetween(6, 18));
+    }
+
+    entries.push({
+      cardKey: "workoutMinutes",
+      value: workoutMinutes,
+      recordedAt: date,
+    });
+
+    // pushups - now daily
+    let pushups = 0;
+    if (didWorkout && chance(0.52)) {
+      strengthBase += randomBetween(-0.05, 0.18);
+      pushups = Math.round(
+        clamp(
+          strengthBase +
+            (phase === "building" ? 4 : 0) +
+            (phase === "consistent" ? 6 : 0) +
+            (phase === "strong" ? 8 : 0) +
+            randomBetween(-3, 6),
+          8,
+          38
+        )
+      );
+    } else {
+      pushups = Math.round(
+        clamp(
+          4 +
+            (phase === "consistent" ? 2 : 0) +
+            (phase === "strong" ? 3 : 0) +
+            randomBetween(-2, 3),
+          0,
+          16
+        )
+      );
+    }
+
+    entries.push({
+      cardKey: "pushups",
+      value: pushups,
+      note: didWorkout && chance(0.06) ? "Sauberer Satz" : undefined,
+      recordedAt: date,
+    });
+
+    // burpees - now daily
+    let burpees = 0;
+    if (didWorkout && chance(0.28)) {
+      burpees = Math.round(
+        clamp(
+          8 +
+            (phase === "building" ? 2 : 0) +
+            (phase === "consistent" ? 3 : 0) +
+            (phase === "strong" ? 5 : 0) +
+            randomBetween(-2, 5),
+          6,
+          24
+        )
+      );
+    } else {
+      burpees = Math.round(randomBetween(0, 6));
+    }
+
+    entries.push({
+      cardKey: "burpees",
+      value: burpees,
+      note: didWorkout && chance(0.05) ? "Finisher" : undefined,
+      recordedAt: date,
+    });
+
+    // running / distance - keep realistic, not forced every day
+    if (didWorkout && chance(0.4)) {
+      runningPaceBase -= phase === "building" ? 0.002 : 0;
+      runningPaceBase -= phase === "consistent" ? 0.003 : 0;
+      runningPaceBase -= phase === "strong" ? 0.002 : 0;
+      if (phase === "slump") runningPaceBase += 0.003;
+
+      const distanceKm = round(
+        clamp(
+          randomBetween(
+            phase === "starting" ? 2.4 : 3.2,
+            phase === "strong" ? 10.5 : 7.8
+          ),
+          2,
+          14
+        ),
+        2
+      );
+
+      let pace = runningPaceBase + randomBetween(-0.22, 0.28);
+      if (sleep < 6) pace += 0.18;
+      if (vacationWindow) pace += 0.08;
+      pace = clamp(round(pace, 2), 4.65, 7.2);
+
+      const timeMinutes = round(distanceKm * pace, 1);
+      const distanceMeters = Math.round(distanceKm * 1000);
 
       entries.push({
-        cardKey: "workoutMinutes",
-        value: workoutMinutes,
+        cardKey: "running",
+        value: distanceKm,
+        secondaryValue: timeMinutes,
+        note: chance(0.08) ? "Locker" : chance(0.05) ? "Intervall" : undefined,
         recordedAt: date,
       });
 
-      // strength work
-      if (chance(0.52)) {
-        strengthBase += randomBetween(-0.05, 0.18);
-        const pushups = Math.round(
-          clamp(
-            strengthBase +
-              (phase === "building" ? 4 : 0) +
-              (phase === "consistent" ? 6 : 0) +
-              (phase === "strong" ? 8 : 0) +
-              randomBetween(-3, 6),
-            8,
-            38
-          )
-        );
+      entries.push({
+        cardKey: "distance",
+        value: distanceMeters,
+        recordedAt: date,
+      });
+    } else {
+      // optional daily distance fallback
+      const estimatedDistanceMeters = Math.round(
+        clamp(steps * randomBetween(0.62, 0.78), 1200, 14000)
+      );
 
-        entries.push({
-          cardKey: "pushups",
-          value: pushups,
-          note: chance(0.06) ? "Sauberer Satz" : undefined,
-          recordedAt: date,
-        });
-      }
-
-      if (chance(0.28)) {
-        const burpees = Math.round(
-          clamp(
-            8 +
-              (phase === "building" ? 2 : 0) +
-              (phase === "consistent" ? 3 : 0) +
-              (phase === "strong" ? 5 : 0) +
-              randomBetween(-2, 5),
-            6,
-            24
-          )
-        );
-
-        entries.push({
-          cardKey: "burpees",
-          value: burpees,
-          note: chance(0.05) ? "Finisher" : undefined,
-          recordedAt: date,
-        });
-      }
-
-      // running / distance
-      if (chance(0.4)) {
-        runningPaceBase -= phase === "building" ? 0.002 : 0;
-        runningPaceBase -= phase === "consistent" ? 0.003 : 0;
-        runningPaceBase -= phase === "strong" ? 0.002 : 0;
-        if (phase === "slump") runningPaceBase += 0.003;
-
-        const distanceKm = round(
-          clamp(
-            randomBetween(
-              phase === "starting" ? 2.4 : 3.2,
-              phase === "strong" ? 10.5 : 7.8
-            ),
-            2,
-            14
-          ),
-          2
-        );
-
-        let pace = runningPaceBase + randomBetween(-0.22, 0.28);
-        if (sleep < 6) pace += 0.18;
-        if (vacationWindow) pace += 0.08;
-        pace = clamp(round(pace, 2), 4.65, 7.2);
-
-        const timeMinutes = round(distanceKm * pace, 1);
-        const distanceMeters = Math.round(distanceKm * 1000);
-
-        // card.unit === min/km -> value=distance, secondaryValue=time
-        entries.push({
-          cardKey: "running",
-          value: distanceKm,
-          secondaryValue: timeMinutes,
-          note: chance(0.08)
-            ? "Locker"
-            : chance(0.05)
-            ? "Intervall"
-            : undefined,
-          recordedAt: date,
-        });
-
-        entries.push({
-          cardKey: "distance",
-          value: distanceMeters,
-          recordedAt: date,
-        });
-      }
+      entries.push({
+        cardKey: "distance",
+        value: estimatedDistanceMeters,
+        recordedAt: date,
+      });
     }
   }
 

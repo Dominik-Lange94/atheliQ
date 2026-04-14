@@ -576,7 +576,7 @@ export default function AthleteDashboard() {
                   onChange={(e) => {
                     if (e.target.value) selectDate(e.target.value);
                   }}
-                  className="mb-3 w-full rounded-xl border border-subtle bg-surface-2 px-3 py-2 text-sm text-primary focus:border-[#FFD300]/50 focus:outline-none"
+                  className="themed-date-input mb-3 w-full rounded-xl border border-subtle bg-surface-2 px-3 py-2 text-sm text-primary focus:border-[#FFD300]/50 focus:outline-none"
                 />
 
                 <div className="grid grid-cols-3 gap-1.5">
