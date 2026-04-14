@@ -40,7 +40,7 @@ const StatCardSchema = new Schema<IStatCard>(
     goalValue: { type: Number, default: null },
     goalDirection: {
       type: String,
-      enum: ["lose", "gain", "min", "max", null],
+      enum: ["lose", "gain", "min", "max"],
       default: null,
     },
   },

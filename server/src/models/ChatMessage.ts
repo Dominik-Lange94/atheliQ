@@ -103,6 +103,7 @@ const ChatMessageSchema = new Schema<IChatMessage>(
           "connect_accepted",
           "connect_declined",
           "permission_update",
+          "goal_update",
         ],
         default: "user",
         required: true,
