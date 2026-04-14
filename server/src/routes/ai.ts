@@ -7,21 +7,431 @@ import { generateSPAQText } from "../ai/provider";
 const router = Router();
 router.use(authenticate, requireRole("athlete"));
 
+type AiIntent =
+  | "daily_review"
+  | "progress_review"
+  | "long_term_review"
+  | "motivation"
+  | "insights"
+  | "goal_review"
+  | "consistency_review"
+  | "general";
+
 const SYSTEM_PROMPT = `
 Du bist SPAQ Bot, ein intelligenter Fitness- und Fortschrittsassistent.
-Du bist motivierend, ehrlich, konkret und freundlich.
+Du bist motivierend, ehrlich, konkret, datenbasiert und freundlich.
+Du klingst wie ein starker persönlicher Coach, nicht wie ein generischer Chatbot.
 Du erfindest keine Daten.
 Wenn Daten fehlen, sagst du das offen.
-Du nutzt sowohl Profilkontext als auch Stats/Trends.
+Du nutzt nur die vorhandenen Profil-, Tages-, Vergleichs-, Trend- und Fortschrittsdaten.
 Du gibst keine medizinischen Diagnosen.
-Du antwortest auf Deutsch.
+Du antwortest immer auf Deutsch.
 Passe den Ton möglichst an "profile.aiTone" an:
 - supportive = warm, motivierend, positiv
 - direct = klar, knapp, ehrlich
 - coach_like = strukturiert, sachlich, führend
-Halte Antworten meistens kompakt, aber hilfreich.
-Wenn sinnvoll, gib klare nächste Schritte in 2-4 Punkten.
+
+Wichtige Verhaltensregeln:
+- Wenn der User nach "heute" fragt, analysiere konkret den heutigen Tag.
+- Wenn der User nach Fortschritt fragt, vergleiche sinnvoll mit älteren Daten.
+- Wenn der User nach letzter Woche / letztem Monat / letztem Jahr fragt, fokussiere langfristige Entwicklung.
+- Wenn es Fortschritte gibt, benenne sie klar.
+- Wenn es Rückschritte gibt, benenne sie ehrlich, aber konstruktiv.
+- Motivation muss kurz, persönlich und auf echte Daten gestützt sein.
+- Keine übertriebene Länge.
+- Keine Floskeln ohne Datenbezug.
+- Wenn sinnvoll, gib 2-4 kurze nächste Schritte.
+- Antworte klar strukturiert, gut lesbar und hilfreich.
 `.trim();
+
+function detectIntent(text: string): AiIntent {
+  const t = text.toLowerCase();
+
+  const hasToday =
+    t.includes("heute") ||
+    t.includes("mein tag") ||
+    t.includes("wie lief mein tag") ||
+    t.includes("wie war mein tag") ||
+    t.includes("tagesanalyse") ||
+    t.includes("heutigen tag");
+
+  const hasProgress =
+    t.includes("fortschritt") ||
+    t.includes("verbessert") ||
+    t.includes("verbesserung") ||
+    t.includes("entwickelt") ||
+    t.includes("besser geworden") ||
+    t.includes("wo bin ich besser") ||
+    t.includes("was wurde besser") ||
+    t.includes("wie habe ich mich verbessert");
+
+  const hasLongTerm =
+    t.includes("letzten jahr") ||
+    t.includes("letztes jahr") ||
+    t.includes("im letzten jahr") ||
+    t.includes("langfristig") ||
+    t.includes("über monate") ||
+    t.includes("über das jahr") ||
+    t.includes("entwicklung") ||
+    t.includes("langzeit");
+
+  const hasMotivation =
+    t.includes("motivier") ||
+    t.includes("motivation") ||
+    t.includes("push") ||
+    t.includes("gib mir kraft") ||
+    t.includes("munter mich auf");
+
+  const hasInsights =
+    t.includes("insight") ||
+    t.includes("analyse") ||
+    t.includes("analysiere") ||
+    t.includes("stärken") ||
+    t.includes("schwächen") ||
+    t.includes("risiken");
+
+  const hasGoal =
+    t.includes("ziel") ||
+    t.includes("goal") ||
+    t.includes("bis zum ziel") ||
+    t.includes("zielgewicht") ||
+    t.includes("wie weit bin ich");
+
+  const hasConsistency =
+    t.includes("konstanz") ||
+    t.includes("consistency") ||
+    t.includes("regelmäßig") ||
+    t.includes("dranbleiben") ||
+    t.includes("wie konstant");
+
+  if (hasToday) return "daily_review";
+  if (hasLongTerm) return "long_term_review";
+  if (hasProgress) return "progress_review";
+  if (hasMotivation) return "motivation";
+  if (hasInsights) return "insights";
+  if (hasGoal) return "goal_review";
+  if (hasConsistency) return "consistency_review";
+
+  return "general";
+}
+
+function formatHistory(messages: any[]) {
+  return messages.map((m) => `${m.role.toUpperCase()}: ${m.text}`).join("\n");
+}
+
+function buildMotivationPrompt(context: unknown) {
+  return `
+Erstelle eine kurze, persönliche Motivation für den Athleten.
+Nutze NUR die vorhandenen Daten.
+
+Kontext:
+${JSON.stringify(context, null, 2)}
+
+Ziel:
+- kurze echte Motivation
+- wenn möglich 1 echter Datenpunkt
+- wenn möglich 1 echter Fortschritt oder Fokus
+- nicht generisch
+
+Regeln:
+- maximal 90 Wörter
+- kein leeres Gerede
+- wenn Datenlage dünn ist, offen sagen und einen einfachen Startfokus geben
+
+Antwortformat:
+1. kurze motivierende Einleitung
+2. 1 konkreter Datenbezug
+3. 1 kurzer Fokus für den nächsten Schritt
+`.trim();
+}
+
+function buildInsightsPrompt(context: unknown) {
+  return `
+Analysiere den Athletenkontext datenbasiert.
+
+Kontext:
+${JSON.stringify(context, null, 2)}
+
+Gib JSON zurück mit genau dieser Struktur:
+{
+  "summary": "kurze Zusammenfassung",
+  "strengths": ["..."],
+  "risks": ["..."],
+  "nextSteps": ["..."],
+  "focusMetricIds": ["optional cardId"]
+}
+
+Regeln:
+- nichts erfinden
+- wenn Daten fehlen, ehrlich benennen
+- strengths/risks/nextSteps jeweils 0-4 Einträge
+- keine medizinischen Diagnosen
+- klare, brauchbare Aussagen
+`.trim();
+}
+
+function mapIntentToMessageKind(
+  intent: AiIntent
+): "chat" | "motivation" | "insight" {
+  if (intent === "motivation") return "motivation";
+  if (intent === "insights") return "insight";
+  return "chat";
+}
+
+function buildDailyReviewPrompt(
+  context: unknown,
+  userText: string,
+  historyText: string
+) {
+  return `
+Athletenkontext:
+${JSON.stringify(context, null, 2)}
+
+Letzte Konversation:
+${historyText}
+
+Letzte User-Nachricht:
+${userText}
+
+Aufgabe:
+Analysiere den heutigen Tag des Athleten datenbasiert.
+
+Worauf du schauen sollst:
+- heutige Einträge
+- Vergleich heute vs gestern
+- relevante Trends oder letzte 7/30 Tage
+- positives Signal
+- Schwachstelle oder fehlender Bereich
+- kurzer motivierender Abschluss
+
+Regeln:
+- nutze nur echte Daten
+- wenn heute wenig Daten vorhanden sind, sage das offen
+- wenn sinnvoll, vergleiche mit gestern oder dem üblichen Verlauf
+- gib keine medizinischen Diagnosen
+- kompakt, konkret, coachig
+
+Antwortstruktur:
+1. Tagesfazit in 1-2 Sätzen
+2. Was heute gut war
+3. Was heute schwächer war oder fehlt
+4. Nächster Fokus in 1-2 kurzen Punkten
+5. Sehr kurze Motivation am Ende
+`.trim();
+}
+
+function buildProgressReviewPrompt(
+  context: unknown,
+  userText: string,
+  historyText: string
+) {
+  return `
+Athletenkontext:
+${JSON.stringify(context, null, 2)}
+
+Letzte Konversation:
+${historyText}
+
+Letzte User-Nachricht:
+${userText}
+
+Aufgabe:
+Beantworte die Frage nach Fortschritt und Verbesserung datenbasiert.
+
+Worauf du schauen sollst:
+- monthly / weekly comparisons
+- bestValues
+- goalProgress
+- consistency
+- strongestPositiveMetric
+- biggestDropMetric nur wenn sinnvoll
+
+Regeln:
+- benenne konkrete Verbesserungen klar
+- nutze echte Zahlen oder Richtungen, wenn vorhanden
+- wenn Fortschritt nicht klar belegbar ist, sage das offen
+- nenne auch, was noch hinterherhinkt
+- ende mit kurzem motivierenden Coach-Satz
+
+Antwortstruktur:
+1. Wichtigste Verbesserung
+2. Konkreter Trend oder Vergleich
+3. Was das für den Athleten bedeutet
+4. Wo noch Potenzial liegt
+5. 1-2 nächste Schritte
+`.trim();
+}
+
+function buildLongTermReviewPrompt(
+  context: unknown,
+  userText: string,
+  historyText: string
+) {
+  return `
+Athletenkontext:
+${JSON.stringify(context, null, 2)}
+
+Letzte Konversation:
+${historyText}
+
+Letzte User-Nachricht:
+${userText}
+
+Aufgabe:
+Analysiere die längerfristige Entwicklung des Athleten.
+
+Worauf du schauen sollst:
+- längerfristige Trends
+- goalProgress
+- consistency über Zeit
+- bestValues
+- monthly comparisons
+- Entwicklung von Gewohnheiten, falls aus den Daten erkennbar
+
+Regeln:
+- keine erfundenen Jahreszahlen oder langen Geschichten
+- wenn "letztes Jahr" gefragt wird, aber die Daten diesen Zeitraum nicht vollständig abdecken, sag das offen
+- nutze nur das, was im Kontext sichtbar ist
+- fasse die Entwicklung wie ein echter Coach zusammen
+
+Antwortstruktur:
+1. Gesamtentwicklung
+2. Größte Verbesserung
+3. Größte Bremse oder Baustelle
+4. Was sich im Verhalten / Tracking erkennen lässt
+5. Motivierender Abschluss
+`.trim();
+}
+
+function buildGoalReviewPrompt(
+  context: unknown,
+  userText: string,
+  historyText: string
+) {
+  return `
+Athletenkontext:
+${JSON.stringify(context, null, 2)}
+
+Letzte Konversation:
+${historyText}
+
+Letzte User-Nachricht:
+${userText}
+
+Aufgabe:
+Beantworte zielbezogene Fragen datenbasiert.
+
+Worauf du schauen sollst:
+- goalProgress
+- current weight vs target weight
+- daysUntilEvent
+- consistency
+- monthly trend
+
+Regeln:
+- klar sagen, wie nah oder fern das Ziel ist
+- wenn Ziel nicht sauber messbar ist, ehrlich sagen
+- motivierend, aber realistisch bleiben
+
+Antwortstruktur:
+1. Aktueller Stand zum Ziel
+2. Was gerade in die richtige Richtung läuft
+3. Was das Ziel aktuell bremst
+4. 1-2 klare nächste Schritte
+`.trim();
+}
+
+function buildConsistencyPrompt(
+  context: unknown,
+  userText: string,
+  historyText: string
+) {
+  return `
+Athletenkontext:
+${JSON.stringify(context, null, 2)}
+
+Letzte Konversation:
+${historyText}
+
+Letzte User-Nachricht:
+${userText}
+
+Aufgabe:
+Beantworte Fragen zur Konstanz und zum Dranbleiben.
+
+Worauf du schauen sollst:
+- consistencyScore7d
+- consistencyScore30d
+- tracked days
+- mostConsistentMetric
+- mostRecentlyTrackedMetric
+
+Regeln:
+- sage klar, ob der Athlet aktuell konstant trackt oder nicht
+- wenn es Lücken gibt, benenne sie offen
+- kurze, klare Verbesserungsempfehlungen
+
+Antwortstruktur:
+1. Einschätzung der Konstanz
+2. Was gut läuft
+3. Wo Lücken sind
+4. Praktischer Fokus für mehr Regelmäßigkeit
+`.trim();
+}
+
+function buildGeneralPrompt(
+  context: unknown,
+  userText: string,
+  historyText: string
+) {
+  return `
+Athletenkontext:
+${JSON.stringify(context, null, 2)}
+
+Letzte Konversation:
+${historyText}
+
+Letzte User-Nachricht:
+${userText}
+
+Aufgabe:
+Beantworte die letzte User-Nachricht hilfreich, datenbasiert und coachig.
+
+Regeln:
+- nutze Profil + Tagesdaten + Vergleiche + Trends + Fortschritt
+- wenn die Frage unscharf ist, gib trotzdem die nützlichste datenbasierte Antwort
+- bei Verbesserung: konkrete Fortschritte nennen
+- bei Motivation: persönlich und kurz motivieren
+- bei fehlenden Daten: offen sagen, was fehlt
+- nicht generisch antworten
+`.trim();
+}
+
+function buildPromptForIntent(
+  intent: AiIntent,
+  context: unknown,
+  userText: string,
+  historyText: string
+) {
+  switch (intent) {
+    case "daily_review":
+      return buildDailyReviewPrompt(context, userText, historyText);
+    case "progress_review":
+      return buildProgressReviewPrompt(context, userText, historyText);
+    case "long_term_review":
+      return buildLongTermReviewPrompt(context, userText, historyText);
+    case "goal_review":
+      return buildGoalReviewPrompt(context, userText, historyText);
+    case "consistency_review":
+      return buildConsistencyPrompt(context, userText, historyText);
+    case "motivation":
+      return buildMotivationPrompt(context);
+    case "insights":
+      return buildInsightsPrompt(context);
+    default:
+      return buildGeneralPrompt(context, userText, historyText);
+  }
+}
 
 router.get("/thread", async (req: AuthRequest, res: Response) => {
   try {
@@ -47,7 +457,7 @@ router.get("/thread", async (req: AuthRequest, res: Response) => {
           title: "SPAQ Bot",
           lastMessage:
             lastMessage?.text ||
-            "Frag mich nach Motivation, Trends oder Verbesserungen.",
+            "Frag mich nach Motivation, Trends, Fortschritt oder deinem heutigen Tag.",
           lastMessageAt: lastMessage?.createdAt || new Date(),
           unreadCount,
         },
@@ -104,30 +514,12 @@ router.get("/motivation", async (req: AuthRequest, res: Response) => {
       typeof req.query.date === "string" ? req.query.date : undefined;
 
     const context = await buildAthleteAiContext(athleteId, date);
-
-    const prompt = `
-Erstelle eine kurze, persönliche Motivation für den heutigen Athleten.
-Nutze NUR die vorhandenen Daten.
-
-Kontext:
-${JSON.stringify(context, null, 2)}
-
-Regeln:
-- beziehe wenn möglich Ziel, Hürden, Aktivitätsniveau oder Schlaf ein
-- beziehe wenn möglich 1 echten Datenpunkt oder Trend ein
-- wenn Datenlage dünn ist, sage das offen und gib einen einfachen Startfokus
-- maximal 90 Wörter
-
-Antwortformat:
-1 kurze motivierende Einleitung
-1 konkreter Datenbezug
-1 kurzer nächster Fokus
-`.trim();
+    const prompt = buildMotivationPrompt(context);
 
     const result = await generateSPAQText({
       system: SYSTEM_PROMPT,
       prompt,
-      temperature: 0.8,
+      temperature: 0.85,
     });
 
     res.json({
@@ -154,33 +546,12 @@ router.get("/insights", async (req: AuthRequest, res: Response) => {
       typeof req.query.date === "string" ? req.query.date : undefined;
 
     const context = await buildAthleteAiContext(athleteId, date);
-
-    const prompt = `
-Analysiere den Athletenkontext datenbasiert.
-
-Kontext:
-${JSON.stringify(context, null, 2)}
-
-Gib JSON zurück mit genau dieser Struktur:
-{
-  "summary": "kurze Zusammenfassung",
-  "strengths": ["..."],
-  "risks": ["..."],
-  "nextSteps": ["..."],
-  "focusMetricIds": ["optional cardId"]
-}
-
-Regeln:
-- nichts erfinden
-- wenn Daten fehlen, ehrlich benennen
-- strengths/risks/nextSteps jeweils 0-4 Einträge
-- keine medizinischen Diagnosen
-`.trim();
+    const prompt = buildInsightsPrompt(context);
 
     const result = await generateSPAQText({
       system: SYSTEM_PROMPT,
       prompt,
-      temperature: 0.4,
+      temperature: 0.35,
     });
 
     res.json({
@@ -214,6 +585,9 @@ router.post("/thread/messages", async (req: AuthRequest, res: Response) => {
       return;
     }
 
+    const detectedIntent = detectIntent(text);
+    const messageKind = mapIntentToMessageKind(detectedIntent);
+
     const userMessage = await AiChatMessage.create({
       athleteId,
       role: "user",
@@ -222,7 +596,7 @@ router.post("/thread/messages", async (req: AuthRequest, res: Response) => {
       meta: {
         provider: "client",
         model: "",
-        kind: "chat",
+        kind: messageKind,
       },
     });
 
@@ -232,26 +606,31 @@ router.post("/thread/messages", async (req: AuthRequest, res: Response) => {
       .lean();
 
     const context = await buildAthleteAiContext(athleteId, date);
+    const historyText = formatHistory(history);
+    const prompt = buildPromptForIntent(
+      detectedIntent,
+      context,
+      text,
+      historyText
+    );
 
-    const prompt = `
-Athletenkontext:
-${JSON.stringify(context, null, 2)}
-
-Letzte Konversation:
-${history.map((m) => `${m.role.toUpperCase()}: ${m.text}`).join("\n")}
-
-Aufgabe:
-- beantworte die letzte User-Nachricht hilfreich und datenbasiert
-- nutze Profil + Stats + Trends
-- bei Verbesserung: konkrete nächste Schritte
-- bei Motivation: individuell auf Ziel/Hürden/Ton eingehen
-- bei fehlenden Daten: offen sagen, was noch fehlt
-`.trim();
+    const temperature =
+      detectedIntent === "motivation"
+        ? 0.85
+        : detectedIntent === "insights"
+        ? 0.35
+        : detectedIntent === "daily_review"
+        ? 0.55
+        : detectedIntent === "progress_review"
+        ? 0.5
+        : detectedIntent === "long_term_review"
+        ? 0.5
+        : 0.6;
 
     const result = await generateSPAQText({
       system: SYSTEM_PROMPT,
       prompt,
-      temperature: 0.6,
+      temperature,
     });
 
     const assistantMessage = await AiChatMessage.create({
@@ -262,13 +641,14 @@ Aufgabe:
       meta: {
         provider: result.provider,
         model: result.model,
-        kind: "chat",
+        kind: messageKind,
       },
     });
 
     res.json({
       success: true,
       data: {
+        intent: detectedIntent,
         userMessage: {
           _id: String(userMessage._id),
           threadId: "SPAQ-bot",
@@ -281,7 +661,7 @@ Aufgabe:
             type: "user",
             provider: "client",
             model: "",
-            kind: "chat",
+            kind: detectedIntent,
           },
         },
         assistantMessage: {
@@ -296,7 +676,7 @@ Aufgabe:
             type: "assistant",
             provider: result.provider,
             model: result.model,
-            kind: "chat",
+            kind: detectedIntent,
           },
         },
       },
