@@ -1,4 +1,6 @@
 import { ChatMessage } from "../../types/chat";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 interface Props {
   message: ChatMessage;
@@ -13,6 +15,19 @@ function formatTimestamp(date?: string) {
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+function getAttachmentUrl(url: string) {
+  if (!url) return "#";
+  if (url.startsWith("http://") || url.startsWith("https://")) return url;
+
+  const apiBase =
+    (import.meta.env.VITE_API_URL as string | undefined)?.replace(
+      /\/api$/,
+      ""
+    ) || "http://localhost:5000";
+
+  return `${apiBase}${url}`;
 }
 
 function SystemMessageCard({
@@ -70,7 +85,6 @@ function SystemMessageCard({
 
 export default function MessageBubble({ message, isOwn }: Props) {
   const type = message.meta?.type ?? "user";
-  const isSystemMessage = type !== "user";
 
   if (type === "connect_request") {
     return (
@@ -198,24 +212,152 @@ export default function MessageBubble({ message, isOwn }: Props) {
   return (
     <div
       className={`max-w-[78%] rounded-2xl border px-4 py-3 ${
-        isSystemMessage
-          ? "mx-auto border-subtle bg-surface text-primary"
-          : isOwn
+        isOwn
           ? "ml-auto border-[#FFD300] bg-[#FFD300] text-[#0f0f13]"
           : "mr-auto border-subtle bg-surface text-primary"
       }`}
     >
-      <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">
-        {message.text}
-      </p>
+      {message.text ? (
+        <div
+          className={`prose prose-sm max-w-none break-words ${
+            isOwn ? "prose-neutral" : "dark:prose-invert"
+          }`}
+        >
+          <ReactMarkdown
+            remarkPlugins={[remarkGfm]}
+            components={{
+              p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
+              strong: ({ children }) => (
+                <strong className="font-semibold">{children}</strong>
+              ),
+              ul: ({ children }) => (
+                <ul className="mb-2 list-disc space-y-1 pl-5">{children}</ul>
+              ),
+              ol: ({ children }) => (
+                <ol className="mb-2 list-decimal space-y-1 pl-5">{children}</ol>
+              ),
+              li: ({ children }) => (
+                <li className="text-sm leading-relaxed">{children}</li>
+              ),
+              h1: ({ children }) => (
+                <h1 className="mb-2 mt-3 text-base font-semibold first:mt-0">
+                  {children}
+                </h1>
+              ),
+              h2: ({ children }) => (
+                <h2 className="mb-2 mt-3 text-sm font-semibold first:mt-0">
+                  {children}
+                </h2>
+              ),
+              h3: ({ children }) => (
+                <h3 className="mb-1 mt-3 text-sm font-semibold first:mt-0">
+                  {children}
+                </h3>
+              ),
+              a: ({ href, children }) => (
+                <a
+                  href={href}
+                  target="_blank"
+                  rel="noreferrer"
+                  className={`underline underline-offset-2 ${
+                    isOwn
+                      ? "text-[#0f0f13]"
+                      : "text-[#FFD300] hover:text-[#e6be00]"
+                  }`}
+                >
+                  {children}
+                </a>
+              ),
+              code: ({ children, className, ...props }) => {
+                const isBlock = !!className;
+                if (isBlock) {
+                  return (
+                    <code
+                      className="block overflow-x-auto rounded-xl bg-black/10 px-3 py-2 text-[13px]"
+                      {...props}
+                    >
+                      {children}
+                    </code>
+                  );
+                }
+
+                return (
+                  <code
+                    className="rounded bg-black/10 px-1.5 py-0.5 text-[13px]"
+                    {...props}
+                  >
+                    {children}
+                  </code>
+                );
+              },
+              blockquote: ({ children }) => (
+                <blockquote className="my-2 border-l-2 border-current/20 pl-3 italic opacity-90">
+                  {children}
+                </blockquote>
+              ),
+            }}
+          >
+            {message.text}
+          </ReactMarkdown>
+        </div>
+      ) : null}
+
+      {!!message.attachments?.length && (
+        <div className={`${message.text ? "mt-3" : ""} space-y-2`}>
+          {message.attachments.map((attachment, index) => (
+            <a
+              key={`${attachment.url}-${index}`}
+              href={getAttachmentUrl(attachment.url)}
+              target="_blank"
+              rel="noreferrer"
+              className={`flex items-center gap-3 rounded-xl border px-3 py-2 transition-all ${
+                isOwn
+                  ? "border-black/10 bg-white/30 hover:bg-white/40"
+                  : "border-subtle bg-surface-2 hover:border-strong hover:bg-surface-3"
+              }`}
+            >
+              <div
+                className={`flex h-9 w-9 items-center justify-center rounded-lg ${
+                  isOwn ? "bg-black/10" : "bg-[#FFD300]/10"
+                }`}
+              >
+                <svg
+                  className={`h-4 w-4 ${
+                    isOwn ? "text-[#0f0f13]" : "text-[#FFD300]"
+                  }`}
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={1.7}
+                    d="M12 16V8m0 8l-3-3m3 3l3-3M5 20h14"
+                  />
+                </svg>
+              </div>
+
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium">
+                  {attachment.filename}
+                </p>
+                <p
+                  className={`text-[11px] ${
+                    isOwn ? "text-[#0f0f13]/70" : "text-muted"
+                  }`}
+                >
+                  PDF · {(attachment.size / 1024 / 1024).toFixed(2)} MB
+                </p>
+              </div>
+            </a>
+          ))}
+        </div>
+      )}
 
       <div
         className={`mt-2 text-[10px] ${
-          isSystemMessage
-            ? "text-muted"
-            : isOwn
-            ? "text-[#0f0f13]/70"
-            : "text-muted"
+          isOwn ? "text-[#0f0f13]/70" : "text-muted"
         }`}
       >
         {formatTimestamp(message.createdAt)}

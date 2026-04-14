@@ -1,4 +1,11 @@
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import {
+  FormEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { ChatMessage, ChatThread } from "../../types/chat";
 import MessageBubble from "./MessageBubble";
 import ChatAvatar from "./ChatAvatar";
@@ -8,6 +15,7 @@ interface Props {
   messages: ChatMessage[];
   currentUserId: string;
   onSend: (text: string) => Promise<void>;
+  onSendPdf?: (file: File) => Promise<void>;
   isLoading?: boolean;
   isSending?: boolean;
   onBack?: () => void | Promise<void>;
@@ -20,14 +28,19 @@ export default function ChatWindow({
   messages,
   currentUserId,
   onSend,
-  isLoading,
-  isSending,
+  onSendPdf,
+  isLoading = false,
+  isSending = false,
   onBack,
   disableComposer = false,
   composerPlaceholder = "Nachricht schreiben...",
 }: Props) {
   const [text, setText] = useState("");
+  const [isUploadingPdf, setIsUploadingPdf] = useState(false);
+
   const bottomRef = useRef<HTMLDivElement | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -35,6 +48,10 @@ export default function ChatWindow({
 
   useEffect(() => {
     setText("");
+    setIsUploadingPdf(false);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
   }, [thread?._id]);
 
   const statusConfig = useMemo(() => {
@@ -62,22 +79,72 @@ export default function ChatWindow({
     }
   }, [thread?.relationStatus]);
 
-  const canSubmit = !disableComposer && !isSending && !!text.trim();
+  const isBusy = isSending || isUploadingPdf;
+  const canSubmit = !disableComposer && !isBusy && !!text.trim();
+  const canUploadPdf = !disableComposer && !isBusy && !!onSendPdf;
 
-  const handleSubmit = async (e: FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = useCallback(
+    async (e?: FormEvent) => {
+      e?.preventDefault();
 
-    const trimmed = text.trim();
-    if (!trimmed || isSending || disableComposer) return;
+      const trimmed = text.trim();
+      if (!trimmed || isBusy || disableComposer) return;
 
-    await onSend(trimmed);
-    setText("");
-  };
+      await onSend(trimmed);
+      setText("");
+
+      requestAnimationFrame(() => {
+        textareaRef.current?.focus();
+      });
+    },
+    [text, isBusy, disableComposer, onSend]
+  );
 
   const handleKeyDown = async (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      await handleSubmit(e as unknown as FormEvent);
+      await handleSubmit();
+    }
+  };
+
+  const handlePdfButtonClick = () => {
+    if (!canUploadPdf) return;
+    fileInputRef.current?.click();
+  };
+
+  const handlePdfChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+
+    if (!file) return;
+
+    if (file.type !== "application/pdf") {
+      alert("Bitte nur PDF-Dateien hochladen.");
+      e.target.value = "";
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      alert("Die PDF darf maximal 5 MB groß sein.");
+      e.target.value = "";
+      return;
+    }
+
+    if (!onSendPdf || disableComposer || isBusy) {
+      e.target.value = "";
+      return;
+    }
+
+    try {
+      setIsUploadingPdf(true);
+      await onSendPdf(file);
+    } catch (error) {
+      console.error("PDF upload failed", error);
+    } finally {
+      setIsUploadingPdf(false);
+      e.target.value = "";
+      requestAnimationFrame(() => {
+        textareaRef.current?.focus();
+      });
     }
   };
 
@@ -154,13 +221,13 @@ export default function ChatWindow({
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto bg-surface-2 px-4 py-4 space-y-3">
+      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto bg-surface-2 px-4 py-4">
         {isLoading ? (
           <div className="space-y-3">
             {[...Array(6)].map((_, i) => (
               <div
                 key={i}
-                className={`h-16 rounded-2xl animate-pulse ${
+                className={`h-16 animate-pulse rounded-2xl ${
                   i % 2 === 0
                     ? "mr-20 border border-subtle bg-surface"
                     : "ml-20 bg-[#FFD300]/10"
@@ -198,15 +265,50 @@ export default function ChatWindow({
         onSubmit={handleSubmit}
         className="flex items-end gap-3 border-t border-subtle p-4"
       >
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="application/pdf"
+          className="hidden"
+          onChange={handlePdfChange}
+        />
+
+        <button
+          type="button"
+          onClick={handlePdfButtonClick}
+          disabled={!canUploadPdf}
+          className="flex h-[50px] w-[50px] shrink-0 items-center justify-center rounded-2xl border border-subtle bg-surface-2 text-secondary transition-all hover:border-strong hover:bg-surface-3 hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
+          title="PDF senden"
+        >
+          {isUploadingPdf ? (
+            <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+          ) : (
+            <svg
+              className="h-5 w-5"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={1.7}
+                d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828L18 9.828a4 4 0 10-5.657-5.657L5.757 10.757a6 6 0 108.486 8.486L20 13"
+              />
+            </svg>
+          )}
+        </button>
+
         <textarea
+          ref={textareaRef}
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={handleKeyDown}
           rows={2}
           placeholder={composerPlaceholder}
-          disabled={disableComposer || isSending}
+          disabled={disableComposer || isBusy}
           className={`flex-1 resize-none rounded-2xl px-4 py-3 text-primary placeholder:text-muted focus:outline-none transition-all ${
-            disableComposer
+            disableComposer || isBusy
               ? "cursor-not-allowed border border-subtle bg-surface-2 opacity-70"
               : "border border-subtle bg-surface-2 focus:border-[#FFD300]/50"
           }`}

@@ -7,12 +7,11 @@ export type ChatMessageType =
   | "connect_declined"
   | "permission_update";
 
-export interface ChatOtherUser {
-  _id: string;
-  name: string;
-  email: string;
-  role: "coach" | "athlete";
-  avatarUrl?: string;
+export interface ChatAttachment {
+  url: string;
+  filename: string;
+  mimeType: string;
+  size: number;
 }
 
 export interface ChatOtherUser {
@@ -52,6 +51,7 @@ export interface ChatMessage {
   readAt?: string | null;
   createdAt?: string;
   updatedAt?: string;
+  attachments?: ChatAttachment[];
   meta?: ChatMessageMeta;
 }
 

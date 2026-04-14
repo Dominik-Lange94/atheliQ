@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  ChangeEvent,
+} from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../../hooks/useAuth";
 import { api } from "../../lib/api";
@@ -668,6 +675,73 @@ export default function ChatPage() {
     }
   };
 
+  const handleSendPdf = async (file: File) => {
+    if (!activeThread?._id || activeThread._id === AI_THREAD_ID) return;
+
+    if (messagesMeta?.relationStatus !== "active") return;
+
+    try {
+      setSending(true);
+
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const uploadRes = await api.post("/chat/uploads", formData, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+      });
+
+      const uploaded = uploadRes.data?.data as
+        | {
+            url: string;
+            filename: string;
+            mimeType: string;
+            size: number;
+          }
+        | undefined;
+
+      if (!uploaded) {
+        throw new Error("Upload fehlgeschlagen");
+      }
+
+      const { data } = await api.post(
+        `/chat/threads/${activeThread._id}/messages`,
+        {
+          text: "",
+          attachments: [uploaded],
+        }
+      );
+
+      const message = data.data as ChatMessage;
+
+      setMessages((prev) => {
+        const exists = prev.some((m) => m._id === message._id);
+        if (exists) return prev;
+        return [...prev, message];
+      });
+
+      setThreads((prev) =>
+        prev.map((thread) =>
+          thread._id === activeThread._id
+            ? {
+                ...thread,
+                lastMessage: message.text || `📎 ${uploaded.filename}`,
+                lastMessageAt: message.createdAt,
+                unreadCount: 0,
+              }
+            : thread
+        )
+      );
+
+      notifyGlobalChatRefresh();
+    } catch (error) {
+      console.error("Failed to send PDF", error);
+    } finally {
+      setSending(false);
+    }
+  };
+
   const handleAcceptRequest = async () => {
     if (!activeThread?._id || activeThread._id === AI_THREAD_ID) return;
 
@@ -1052,6 +1126,7 @@ export default function ChatPage() {
                   messages={messages}
                   currentUserId={currentUserId}
                   onSend={handleSendMessage}
+                  onSendPdf={handleSendPdf}
                   isLoading={messagesLoading}
                   isSending={sending}
                   onBack={async () => {

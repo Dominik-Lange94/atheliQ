@@ -7,6 +7,13 @@ export type ChatMessageType =
   | "connect_declined"
   | "permission_update";
 
+export interface IChatAttachment {
+  url: string;
+  filename: string;
+  mimeType: string;
+  size: number;
+}
+
 export interface IChatMessageMeta {
   type: ChatMessageType;
   actionRequired?: boolean;
@@ -22,7 +29,36 @@ export interface IChatMessage extends Document {
   createdAt: Date;
   updatedAt: Date;
   meta: IChatMessageMeta;
+  attachments: IChatAttachment[];
 }
+
+const ChatAttachmentSchema = new Schema<IChatAttachment>(
+  {
+    url: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    filename: {
+      type: String,
+      required: true,
+      trim: true,
+      maxlength: 200,
+    },
+    mimeType: {
+      type: String,
+      required: true,
+      trim: true,
+      maxlength: 120,
+    },
+    size: {
+      type: Number,
+      required: true,
+      min: 0,
+    },
+  },
+  { _id: false }
+);
 
 const ChatMessageSchema = new Schema<IChatMessage>(
   {
@@ -46,13 +82,17 @@ const ChatMessageSchema = new Schema<IChatMessage>(
     },
     text: {
       type: String,
-      required: true,
       trim: true,
       maxlength: 2000,
+      default: "",
     },
     readAt: {
       type: Date,
       default: null,
+    },
+    attachments: {
+      type: [ChatAttachmentSchema],
+      default: [],
     },
     meta: {
       type: {
