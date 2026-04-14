@@ -16,6 +16,7 @@ import ChatPage from "./pages/chat/ChatPage";
 import GlobalChatNotifier from "./components/chat/GlobalChatNotifier";
 import AthleteProfileSettingsPage from "./pages/athlete/AthleteProfileSettingsPage";
 import AthleteAnalyzePage from "./pages/athlete/AthleteAnalyzePage";
+import CoachAthleteAnalyzePage from "./pages/coach/CoachAthleteAnalyzePage";
 
 const ProtectedRoute = ({
   children,
@@ -132,6 +133,15 @@ export default function App() {
               element={
                 <ProtectedRoute role="coach">
                   <CoachDashboard />
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/coach/athlete/:athleteId/analyze"
+              element={
+                <ProtectedRoute role="coach">
+                  <CoachAthleteAnalyzePage />
                 </ProtectedRoute>
               }
             />

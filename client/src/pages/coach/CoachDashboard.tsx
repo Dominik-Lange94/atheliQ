@@ -1042,14 +1042,11 @@ export default function CoachDashboard() {
                 </span>
               </h2>
 
-              {sortiertStats.length > 1 && (
-                <button
-                  onClick={() => setAnordneModus((v) => !v)}
-                  className={`flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-medium transition-all ${
-                    anordneModus
-                      ? "border-[#FFD300]/40 bg-[#FFD300]/10 text-[#FFD300]"
-                      : "border-subtle bg-surface text-secondary hover:border-strong hover:text-primary"
-                  }`}
+              <div className="flex items-center gap-2">
+                <Link
+                  to={`/coach/athlete/${ausgewaehltAthleteId}/analyze`}
+                  className="flex items-center gap-1.5 rounded-xl border border-subtle bg-surface px-3 py-1.5 text-xs font-medium text-secondary transition-all hover:border-strong hover:text-primary"
+                  title="Große Analyse öffnen"
                 >
                   <svg
                     className="h-3.5 w-3.5"
@@ -1060,13 +1057,39 @@ export default function CoachDashboard() {
                     <path
                       strokeLinecap="round"
                       strokeLinejoin="round"
-                      strokeWidth={1.5}
-                      d="M4 6h16M4 12h16M4 18h16"
+                      strokeWidth={1.7}
+                      d="M3 3h18v18H3V3zm4 12l3-3 2 2 5-5"
                     />
                   </svg>
-                  {anordneModus ? "Fertig" : "Karten anordnen"}
-                </button>
-              )}
+                  Analyze
+                </Link>
+
+                {sortiertStats.length > 1 && (
+                  <button
+                    onClick={() => setAnordneModus((v) => !v)}
+                    className={`flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-medium transition-all ${
+                      anordneModus
+                        ? "border-[#FFD300]/40 bg-[#FFD300]/10 text-[#FFD300]"
+                        : "border-subtle bg-surface text-secondary hover:border-strong hover:text-primary"
+                    }`}
+                  >
+                    <svg
+                      className="h-3.5 w-3.5"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={1.5}
+                        d="M4 6h16M4 12h16M4 18h16"
+                      />
+                    </svg>
+                    {anordneModus ? "Fertig" : "Karten anordnen"}
+                  </button>
+                )}
+              </div>
             </div>
 
             <div className="rounded-2xl border border-subtle bg-surface p-3">
