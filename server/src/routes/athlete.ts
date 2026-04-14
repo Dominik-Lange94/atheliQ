@@ -195,7 +195,38 @@ router.patch("/cards/:id", async (req: AuthRequest, res: Response) => {
     }
 
     const athleteId = toObjectId(req.user!.userId);
-    const { label, color, chartType, visible, unit } = req.body ?? {};
+
+    const {
+      label,
+      color,
+      chartType,
+      visible,
+      unit,
+      goalEnabled,
+      goalValue,
+      goalDirection,
+    } = req.body ?? {};
+
+    const normalizedGoalEnabled =
+      typeof goalEnabled === "boolean" ? goalEnabled : undefined;
+
+    const normalizedGoalValue =
+      goalValue === null || goalValue === ""
+        ? null
+        : typeof goalValue === "number"
+        ? goalValue
+        : Number.isFinite(Number(goalValue))
+        ? Number(goalValue)
+        : undefined;
+
+    const normalizedGoalDirection =
+      goalDirection === null ||
+      goalDirection === "lose" ||
+      goalDirection === "gain" ||
+      goalDirection === "min" ||
+      goalDirection === "max"
+        ? goalDirection
+        : undefined;
 
     const update: Record<string, unknown> = {};
 
@@ -219,12 +250,29 @@ router.patch("/cards/:id", async (req: AuthRequest, res: Response) => {
       update.unit = unit.trim();
     }
 
+    if (normalizedGoalEnabled !== undefined) {
+      update.goalEnabled = normalizedGoalEnabled;
+    }
+
+    if (normalizedGoalValue !== undefined) {
+      update.goalValue = normalizedGoalValue;
+    }
+
+    if (normalizedGoalDirection !== undefined) {
+      update.goalDirection = normalizedGoalDirection;
+    }
+
+    if (normalizedGoalEnabled === false) {
+      update.goalValue = null;
+      update.goalDirection = null;
+    }
+
     const card = await StatCard.findOneAndUpdate(
       {
         _id: req.params.id,
         athleteId,
       },
-      update,
+      { $set: update },
       { new: true }
     );
 
@@ -512,6 +560,7 @@ router.post("/onboarding", async (req: AuthRequest, res: Response) => {
     });
 
     const currentWeight = toFiniteNumber(body.currentWeightKg);
+    const targetWeight = toFiniteNumber(body.targetWeightKg);
 
     const profile = await AthleteProfile.findOneAndUpdate(
       { athleteId },
@@ -519,7 +568,7 @@ router.post("/onboarding", async (req: AuthRequest, res: Response) => {
         athleteId,
 
         currentWeightKg: currentWeight,
-        targetWeightKg: toFiniteNumber(body.targetWeightKg),
+        targetWeightKg: targetWeight,
         heightCm: toFiniteNumber(body.heightCm),
         birthDate: toSafeDate(body.birthDate),
         gender: body.gender ?? null,
@@ -567,26 +616,47 @@ router.post("/onboarding", async (req: AuthRequest, res: Response) => {
       }
     );
 
-    if (currentWeight !== null) {
+    if (currentWeight !== null || targetWeight !== null) {
       const weightCard = await StatCard.findOne({
         athleteId,
         type: "weight",
       }).sort({ order: 1 });
 
       if (weightCard) {
-        const existingWeightEntry = await StatEntry.findOne({
-          athleteId,
-          cardId: weightCard._id,
-        });
+        if (targetWeight !== null) {
+          weightCard.goalEnabled = true;
+          weightCard.goalValue = targetWeight;
 
-        if (!existingWeightEntry) {
-          await StatEntry.create({
+          if (currentWeight !== null) {
+            if (currentWeight > targetWeight) {
+              weightCard.goalDirection = "lose";
+            } else if (currentWeight < targetWeight) {
+              weightCard.goalDirection = "gain";
+            } else {
+              weightCard.goalDirection = "min";
+            }
+          } else {
+            weightCard.goalDirection = "min";
+          }
+
+          await weightCard.save();
+        }
+
+        if (currentWeight !== null) {
+          const existingWeightEntry = await StatEntry.findOne({
             athleteId,
             cardId: weightCard._id,
-            value: currentWeight,
-            recordedAt: new Date(),
-            note: "Initial onboarding value",
           });
+
+          if (!existingWeightEntry) {
+            await StatEntry.create({
+              athleteId,
+              cardId: weightCard._id,
+              value: currentWeight,
+              recordedAt: new Date(),
+              note: "Initial onboarding value",
+            });
+          }
         }
       }
     }

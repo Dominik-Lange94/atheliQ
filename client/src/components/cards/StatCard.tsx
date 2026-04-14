@@ -15,6 +15,9 @@ interface Props {
     unit: string;
     color?: string;
     chartType?: string;
+    goalEnabled?: boolean;
+    goalValue?: number | null;
+    goalDirection?: "lose" | "gain" | "min" | "max" | null;
   };
   latest: { value: number; recordedAt: string; secondaryValue?: number } | null;
   selected: boolean;
@@ -282,6 +285,15 @@ export default function StatCard({
   const [localChartType, setLocalChartType] = useState(
     card.chartType ?? "line"
   );
+  const [localGoalEnabled, setLocalGoalEnabled] = useState(
+    Boolean(card.goalEnabled)
+  );
+  const [localGoalValue, setLocalGoalValue] = useState<number | null>(
+    typeof card.goalValue === "number" ? card.goalValue : null
+  );
+  const [localGoalDirection, setLocalGoalDirection] = useState<
+    "lose" | "gain" | "min" | "max" | null
+  >(card.goalDirection ?? (isWeight ? "lose" : "min"));
 
   const colorOption = getColorClasses(localColor);
 
@@ -296,11 +308,27 @@ export default function StatCard({
   const [editLabel, setEditLabel] = useState(displayLabel);
   const [editColor, setEditColor] = useState(localColor);
   const [editChartType, setEditChartType] = useState(localChartType);
+  const [editGoalEnabled, setEditGoalEnabled] = useState(
+    Boolean(card.goalEnabled)
+  );
+  const [editGoalValue, setEditGoalValue] = useState(
+    typeof card.goalValue === "number" ? String(card.goalValue) : ""
+  );
+  const [editGoalDirection, setEditGoalDirection] = useState<
+    "lose" | "gain" | "min" | "max"
+  >((card.goalDirection as any) ?? (isWeight ? "lose" : "min"));
 
   const openEdit = () => {
     setEditLabel(localLabel);
     setEditColor(localColor);
     setEditChartType(localChartType);
+    setEditGoalEnabled(localGoalEnabled);
+    setEditGoalValue(
+      typeof localGoalValue === "number" ? String(localGoalValue) : ""
+    );
+    setEditGoalDirection(
+      (localGoalDirection as any) ?? (isWeight ? "lose" : "min")
+    );
     setShowEdit(true);
   };
 
@@ -309,9 +337,21 @@ export default function StatCard({
       ? `${emoji} ${editLabel.trim()}`
       : editLabel.trim();
 
+    const parsedGoalValue =
+      editGoalEnabled && editGoalValue.trim() !== ""
+        ? parseFloat(editGoalValue)
+        : null;
+
     setLocalLabel(editLabel.trim());
     setLocalColor(editColor);
     setLocalChartType(editChartType);
+    setLocalGoalEnabled(editGoalEnabled);
+    setLocalGoalValue(
+      typeof parsedGoalValue === "number" && !Number.isNaN(parsedGoalValue)
+        ? parsedGoalValue
+        : null
+    );
+    setLocalGoalDirection(editGoalEnabled ? editGoalDirection : null);
     setShowEdit(false);
 
     editCard.mutate({
@@ -319,6 +359,12 @@ export default function StatCard({
       label: newLabel,
       color: editColor,
       chartType: editChartType,
+      goalEnabled: editGoalEnabled,
+      goalValue:
+        typeof parsedGoalValue === "number" && !Number.isNaN(parsedGoalValue)
+          ? parsedGoalValue
+          : null,
+      goalDirection: editGoalEnabled ? editGoalDirection : null,
     });
   };
 
@@ -434,6 +480,12 @@ export default function StatCard({
                   day: "2-digit",
                   month: "short",
                 })}
+              </p>
+            )}
+
+            {localGoalEnabled && typeof localGoalValue === "number" && (
+              <p className="mt-1 text-[10px] text-[#c99700] dark:text-[#FFD300]/80">
+                Ziel: {localGoalValue} {displayUnit}
               </p>
             )}
           </div>
@@ -574,7 +626,7 @@ export default function StatCard({
               </div>
             </div>
 
-            <div className="mb-5">
+            <div className="mb-4">
               <label className="mb-2 block text-sm text-secondary">
                 Diagramm-Typ
               </label>
@@ -593,6 +645,61 @@ export default function StatCard({
                     <span className="text-xs font-medium">{ct.label}</span>
                   </button>
                 ))}
+              </div>
+            </div>
+
+            <div className="mb-5">
+              <label className="mb-2 block text-sm text-secondary">Ziel</label>
+
+              <div className="space-y-3 rounded-xl border border-subtle bg-surface-2 p-3">
+                <label className="flex items-center gap-2 text-sm text-primary">
+                  <input
+                    type="checkbox"
+                    checked={editGoalEnabled}
+                    onChange={(e) => setEditGoalEnabled(e.target.checked)}
+                  />
+                  Ziel für diese Karte aktivieren
+                </label>
+
+                {editGoalEnabled && (
+                  <>
+                    <input
+                      type="number"
+                      value={editGoalValue}
+                      onChange={(e) => setEditGoalValue(e.target.value)}
+                      placeholder={`Zielwert in ${displayUnit}`}
+                      step="0.1"
+                      className="w-full rounded-xl border border-subtle bg-surface px-4 py-2.5 text-sm text-primary focus:border-[#FFD300]/50 focus:outline-none"
+                    />
+
+                    <div className="grid grid-cols-2 gap-2">
+                      {(isWeight
+                        ? [
+                            { key: "lose", label: "📉 Abnehmen" },
+                            { key: "gain", label: "📈 Zunehmen" },
+                          ]
+                        : [
+                            { key: "min", label: "⬆ Mindestziel" },
+                            { key: "max", label: "⬇ Obergrenze" },
+                          ]
+                      ).map((option) => (
+                        <button
+                          key={option.key}
+                          onClick={() =>
+                            setEditGoalDirection(option.key as any)
+                          }
+                          className={`rounded-xl border px-3 py-2 text-xs font-medium transition-all ${
+                            editGoalDirection === option.key
+                              ? "border-[#FFD300]/50 bg-[#FFD300]/10 text-[#FFD300]"
+                              : "border-subtle bg-surface text-muted hover:border-strong hover:text-primary"
+                          }`}
+                        >
+                          {option.label}
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
               </div>
             </div>
 

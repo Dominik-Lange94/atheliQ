@@ -15,6 +15,11 @@ type StatCardItem = {
   chartType?: "line" | "bar" | "mixed" | string;
   visible?: boolean;
   order: number;
+
+  goalEnabled?: boolean;
+  goalValue?: number | null;
+  goalDirection?: "lose" | "gain" | "min" | "max" | null;
+
   createdAt?: string;
   updatedAt?: string;
 };
@@ -90,6 +95,9 @@ export const useEditCard = () => {
       chartType,
       visible,
       unit,
+      goalEnabled,
+      goalValue,
+      goalDirection,
     }: {
       id: string;
       label?: string;
@@ -97,6 +105,9 @@ export const useEditCard = () => {
       chartType?: string;
       visible?: boolean;
       unit?: string;
+      goalEnabled?: boolean;
+      goalValue?: number | null;
+      goalDirection?: "lose" | "gain" | "min" | "max" | null;
     }) => {
       const { data } = await api.patch(`/athlete/cards/${id}`, {
         label,
@@ -104,6 +115,9 @@ export const useEditCard = () => {
         chartType,
         visible,
         unit,
+        goalEnabled,
+        goalValue,
+        goalDirection,
       });
       return data.data as StatCardItem;
     },

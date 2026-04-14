@@ -120,29 +120,91 @@ function formatHistory(messages: any[]) {
 }
 
 function buildMotivationPrompt(context: unknown) {
+  const c = context as any;
+
+  const motivationContext = {
+    athlete: {
+      name: c?.athlete?.name ?? null,
+    },
+    profile: {
+      primaryGoal: c?.profile?.primaryGoal ?? null,
+      targetWeightKg: c?.profile?.targetWeightKg ?? null,
+    },
+    derived: {
+      currentWeightKg: c?.derived?.currentWeightKg ?? null,
+      weightDeltaToGoal: c?.derived?.weightDeltaToGoal ?? null,
+    },
+    consistency: c?.consistency ?? null,
+    performanceSnapshot: c?.performanceSnapshot ?? null,
+    comparisons: {
+      todayVsYesterday: c?.comparisons?.todayVsYesterday ?? [],
+      weekly: c?.comparisons?.weekly ?? [],
+      monthly: c?.comparisons?.monthly ?? [],
+    },
+  };
+
   return `
-Erstelle eine kurze, persönliche Motivation für den Athleten.
-Nutze NUR die vorhandenen Daten.
+Erstelle eine kurze Motivation für den Athleten.
+Nutze NUR die vorhandenen Daten aus dem unten stehenden Kontext.
 
 Kontext:
-${JSON.stringify(context, null, 2)}
+${JSON.stringify(motivationContext, null, 2)}
 
-Ziel:
-- kurze echte Motivation
-- wenn möglich 1 echter Datenpunkt
-- wenn möglich 1 echter Fortschritt oder Fokus
-- nicht generisch
+WICHTIGE REGELN:
+- antworte auf Deutsch
+- gib AUSSCHLIESSLICH gültiges JSON zurück
+- keine Markdown-Formatierung
+- keine Einleitung
+- keine zusätzlichen Sätze vor oder nach dem JSON
+- kein Rollenspiel
+- keine Wir-Form
+- kein kitschiger Ton
+- keine Meta-Sätze wie:
+  - "Hier ist deine Motivation"
+  - "Deine Motivation"
+  - "Ich bin stolz auf dich"
+  - "Lass uns gemeinsam"
 
-Regeln:
-- maximal 90 Wörter
-- kein leeres Gerede
-- wenn Datenlage dünn ist, offen sagen und einen einfachen Startfokus geben
+INHALTSREGELN:
+- verwechsle niemals Gewicht, Körpergröße, Geschwindigkeit oder andere Metriken
+- "Körpergröße" darf niemals in kg beschrieben werden
+- "Gewicht" darf niemals als Körpergröße beschrieben werden
+- wenn ein Wert nicht sicher interpretierbar ist, nutze ihn nicht
+- wenn currentWeightKg und targetWeightKg vorhanden sind, formuliere den Abstand neutral
+- sage NICHT automatisch "abnehmen", "zunehmen", "wieder erreichen" oder ähnliche Richtungen, wenn das nicht eindeutig ist
+- nutze für dataPoint nur sichere Daten
+- dataPoint muss konkret und wahr sein
+- nextFocus muss kurz, konkret und realistisch sein
+- keine generischen Aussagen ohne Datenbezug
 
-Antwortformat:
-1. kurze motivierende Einleitung
-2. 1 konkreter Datenbezug
-3. 1 kurzer Fokus für den nächsten Schritt
+JSON-Format:
+{
+  "motivation": "maximal 1 kurzer motivierender Satz",
+  "dataPoint": "maximal 1 kurzer echter Datenbezug",
+  "nextFocus": "maximal 1 kurzer klarer nächster Fokus"
+}
 `.trim();
+}
+
+function extractJsonObject(text: string): {
+  motivation?: string;
+  dataPoint?: string;
+  nextFocus?: string;
+} | null {
+  const trimmed = text.trim();
+
+  try {
+    return JSON.parse(trimmed);
+  } catch {}
+
+  const match = trimmed.match(/\{[\s\S]*\}/);
+  if (!match) return null;
+
+  try {
+    return JSON.parse(match[0]);
+  } catch {
+    return null;
+  }
 }
 
 function buildInsightsPrompt(context: unknown) {
@@ -519,13 +581,31 @@ router.get("/motivation", async (req: AuthRequest, res: Response) => {
     const result = await generateSPAQText({
       system: SYSTEM_PROMPT,
       prompt,
-      temperature: 0.85,
+      temperature: 0.25,
     });
+
+    const parsed = extractJsonObject(result.text);
 
     res.json({
       success: true,
       data: {
         text: result.text,
+        structured: parsed
+          ? {
+              motivation:
+                typeof parsed.motivation === "string"
+                  ? parsed.motivation.trim()
+                  : "",
+              dataPoint:
+                typeof parsed.dataPoint === "string"
+                  ? parsed.dataPoint.trim()
+                  : "",
+              nextFocus:
+                typeof parsed.nextFocus === "string"
+                  ? parsed.nextFocus.trim()
+                  : "",
+            }
+          : null,
         provider: result.provider,
         model: result.model,
       },
