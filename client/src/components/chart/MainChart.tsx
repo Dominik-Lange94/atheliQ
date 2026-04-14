@@ -541,7 +541,9 @@ export default function MainChart({
                 fontSize: "13px",
               }}
               formatter={(v: any, name: any, props: any) => {
-                if (name === "trend") return [`${v} ${displayUnit}`, "Trend"];
+                if (name === "trend") {
+                  return [`${v} ${displayUnit}`, "Trend"];
+                }
 
                 return [
                   <span style={{ color: cardColor }}>
@@ -549,6 +551,45 @@ export default function MainChart({
                   </span>,
                   stripEmoji(displayCard?.label ?? ""),
                 ];
+              }}
+              itemSorter={(a, b) => {
+                // value immer oben
+                if (a.dataKey === "value") return -1;
+                if (b.dataKey === "value") return 1;
+                return 0;
+              }}
+              content={({ payload, label }) => {
+                if (!payload || !payload.length) return null;
+
+                const valueItem = payload.find((p) => p.dataKey === "value");
+                const trendItem = payload.find((p) => p.dataKey === "trend");
+
+                return (
+                  <div
+                    style={{
+                      background: chartUi.tooltipBg,
+                      border: `1px solid ${chartUi.tooltipBorder}`,
+                      borderRadius: "12px",
+                      padding: "10px 12px",
+                      fontSize: "13px",
+                      color: chartUi.tooltipText,
+                    }}
+                  >
+                    <div style={{ marginBottom: 4, opacity: 0.7 }}>{label}</div>
+
+                    {valueItem && (
+                      <div style={{ color: cardColor, fontWeight: 500 }}>
+                        {valueItem.payload._real} {displayUnit}
+                      </div>
+                    )}
+
+                    {trendItem && (
+                      <div style={{ opacity: 0.7, fontSize: 12 }}>
+                        Trend: {trendItem.value} {displayUnit}
+                      </div>
+                    )}
+                  </div>
+                );
               }}
             />
 
@@ -600,6 +641,7 @@ export default function MainChart({
               <Line
                 type="monotone"
                 dataKey="value"
+                name="hidden"
                 stroke={cardColor}
                 strokeWidth={2}
                 dot={

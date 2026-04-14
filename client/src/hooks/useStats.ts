@@ -128,6 +128,95 @@ export const useEditCard = () => {
   });
 };
 
+export const useCoachUpdateAthleteCardGoal = () => {
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      athleteId,
+      cardId,
+      goalEnabled,
+      goalValue,
+      goalDirection,
+      from,
+      to,
+    }: {
+      athleteId: string;
+      cardId: string;
+      goalEnabled: boolean;
+      goalValue?: number | null;
+      goalDirection?: "lose" | "gain" | "min" | "max" | null;
+      from?: string;
+      to?: string;
+    }) => {
+      const { data } = await api.patch(
+        `/coach/athletes/${athleteId}/cards/${cardId}/goal`,
+        {
+          goalEnabled,
+          goalValue,
+          goalDirection,
+        }
+      );
+
+      return {
+        card: data.data,
+        athleteId,
+        from,
+        to,
+      };
+    },
+    onSuccess: (_result, vars) => {
+      qc.invalidateQueries({
+        queryKey: ["athlete-stats", vars.athleteId],
+      });
+      qc.invalidateQueries({
+        queryKey: ["chat-unread"],
+      });
+    },
+  });
+};
+
+export const useCoachUpdateAthleteGoal = () => {
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      athleteId,
+      cardId,
+      goalEnabled,
+      goalValue,
+      goalDirection,
+    }: {
+      athleteId: string;
+      cardId: string;
+      goalEnabled: boolean;
+      goalValue: number | null;
+      goalDirection: "lose" | "gain" | "min" | "max" | null;
+    }) => {
+      const { data } = await api.patch(
+        `/coach/athletes/${athleteId}/cards/${cardId}/goal`,
+        {
+          goalEnabled,
+          goalValue,
+          goalDirection,
+        }
+      );
+      return data.data;
+    },
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({
+        queryKey: ["athlete-stats", vars.athleteId],
+      });
+      qc.invalidateQueries({
+        queryKey: ["coach-athletes"],
+      });
+      qc.invalidateQueries({
+        queryKey: ["chat-threads"],
+      });
+    },
+  });
+};
+
 // ─── Reorder Cards ────────────────────────────────────────────────────────────
 
 export const useReorderCards = () => {

@@ -315,10 +315,6 @@ export default function AthleteDashboard() {
           <BrandLogo showText={false} imageClassName="h-8 w-auto" />
         </div>
 
-        <div className="absolute left-1/2 hidden -translate-x-1/2 lg:flex items-center">
-          <WeatherClock />
-        </div>
-
         <div className="flex items-center gap-2">
           <Link
             to="/chat"
@@ -503,115 +499,10 @@ export default function AthleteDashboard() {
             <p className="mt-1 text-sm text-muted">Deine Leistungsübersicht</p>
           </div>
 
-          <div className="relative flex flex-shrink-0 items-center gap-2 rounded-xl border border-subtle bg-surface px-3 py-2">
-            <button
-              onClick={goToPrevDay}
-              className="flex h-7 w-7 items-center justify-center rounded-lg border border-subtle bg-surface-2 text-sm text-secondary transition-all hover:border-strong hover:text-primary"
-            >
-              ←
-            </button>
-
-            <button
-              onClick={() => setShowCalendar((v) => !v)}
-              className="group min-w-[130px] text-center"
-            >
-              <p className="text-sm font-medium leading-tight text-primary transition-colors group-hover:text-[#FFD300]">
-                {formatDateDisplay(selectedDate)}
-              </p>
-
-              {!isToday ? (
-                <p className="text-xs text-muted">
-                  {new Date(selectedDate + "T12:00:00").toLocaleDateString(
-                    "de-DE",
-                    { day: "2-digit", month: "2-digit", year: "2-digit" }
-                  )}
-                </p>
-              ) : (
-                <p className="text-[10px] text-muted">📅 Datum wählen</p>
-              )}
-            </button>
-
-            <button
-              onClick={goToNextDay}
-              disabled={isToday}
-              className="flex h-7 w-7 items-center justify-center rounded-lg border border-subtle bg-surface-2 text-sm text-secondary transition-all hover:border-strong hover:text-primary disabled:cursor-not-allowed disabled:opacity-30"
-            >
-              →
-            </button>
-
-            <div className="h-5 w-px bg-[var(--border-subtle)]" />
-
-            <button
-              onClick={() => {
-                setSelectedDate(TODAY);
-                setWindowOffset(0);
-                setShowCalendar(false);
-              }}
-              disabled={isToday}
-              className={`rounded-lg border px-2.5 py-1 text-xs transition-all ${
-                isToday
-                  ? "cursor-not-allowed border-subtle text-muted"
-                  : "border-[#FFD300]/30 text-[#FFD300] hover:border-[#FFD300]/60 hover:bg-[#FFD300]/5"
-              }`}
-            >
-              Heute
-            </button>
-
-            {showCalendar && (
-              <div className="absolute right-0 top-full z-50 mt-2 min-w-[260px] rounded-2xl border border-subtle bg-surface p-3 shadow-2xl shadow-black/40">
-                <div className="mb-2 flex items-center justify-between">
-                  <p className="text-xs text-muted">Datum auswählen</p>
-                  <button
-                    onClick={() => setShowCalendar(false)}
-                    className="text-sm text-muted transition hover:text-primary"
-                  >
-                    ✕
-                  </button>
-                </div>
-
-                <input
-                  type="date"
-                  value={selectedDate}
-                  max={TODAY}
-                  onChange={(e) => {
-                    if (e.target.value) selectDate(e.target.value);
-                  }}
-                  className="themed-date-input mb-3 w-full rounded-xl border border-subtle bg-surface-2 px-3 py-2 text-sm text-primary focus:border-[#FFD300]/50 focus:outline-none"
-                />
-
-                <div className="grid grid-cols-3 gap-1.5">
-                  {[
-                    { label: "Heute", offset: 0 },
-                    { label: "Gestern", offset: 1 },
-                    { label: "Vor 3T", offset: 3 },
-                    { label: "Vor 1W", offset: 7 },
-                    { label: "Vor 2W", offset: 14 },
-                    { label: "Vor 1M", offset: 30 },
-                  ].map(({ label, offset }) => {
-                    const d = new Date(TODAY + "T12:00:00");
-                    d.setDate(d.getDate() - offset);
-                    const ds = toDateStr(d);
-
-                    return (
-                      <button
-                        key={label}
-                        onClick={() => selectDate(ds)}
-                        className={`rounded-lg border px-2 py-1.5 text-xs font-medium transition-all ${
-                          selectedDate === ds
-                            ? "border-[#FFD300]/40 bg-[#FFD300]/10 text-[#FFD300]"
-                            : "border-subtle text-secondary hover:border-strong hover:text-primary"
-                        }`}
-                      >
-                        {label}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
+          <div className="flex flex-shrink-0 items-center gap-3 rounded-xl py-2.5">
+            <WeatherClock />
           </div>
         </div>
-
         <MainChart
           key={orderedCards
             .map((c: any) => `${c._id}-${c.chartType}`)

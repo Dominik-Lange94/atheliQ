@@ -4,6 +4,7 @@ import {
   useCoachAthletes,
   useAthleteStats,
   useAthletesActivity,
+  useCoachUpdateAthleteCardGoal,
 } from "../../hooks/useStats";
 import {
   ResponsiveContainer,
@@ -167,9 +168,6 @@ function useKartenPrefs(cardId: string, defaultColor: string) {
   const [chartTyp, setChartTypState] = useState<string>(
     saved?.chartTyp ?? "line"
   );
-  const [gewichtZiel, setGewichtZielState] = useState<"abnehmen" | "zunehmen">(
-    saved?.gewichtZiel ?? "abnehmen"
-  );
 
   const save = (n: any) => {
     try {
@@ -179,17 +177,12 @@ function useKartenPrefs(cardId: string, defaultColor: string) {
 
   const setFarbKey = (v: string) => {
     setFarbKeyState(v);
-    save({ farbKey: v, chartTyp, gewichtZiel });
+    save({ farbKey: v, chartTyp });
   };
 
   const setChartTyp = (v: string) => {
     setChartTypState(v);
-    save({ farbKey, chartTyp: v, gewichtZiel });
-  };
-
-  const setGewichtZiel = (v: "abnehmen" | "zunehmen") => {
-    setGewichtZielState(v);
-    save({ farbKey, chartTyp, gewichtZiel: v });
+    save({ farbKey, chartTyp: v });
   };
 
   return {
@@ -197,31 +190,43 @@ function useKartenPrefs(cardId: string, defaultColor: string) {
     setFarbKey,
     chartTyp,
     setChartTyp,
-    gewichtZiel,
-    setGewichtZiel,
   };
 }
 
 function AthletKarte({
+  athleteId,
   card,
   entries,
   ausgewaehltesdatum,
+  von,
+  bis,
 }: {
+  athleteId: string;
   card: any;
   entries: any[];
   ausgewaehltesdatum: string;
+  von: string;
+  bis: string;
 }) {
   const { resolvedTheme } = useTheme();
+  const updateGoal = useCoachUpdateAthleteCardGoal();
+
+  const [showGoalEdit, setShowGoalEdit] = useState(false);
+  const [editGoalEnabled, setEditGoalEnabled] = useState(
+    Boolean(card.goalEnabled)
+  );
+  const [editGoalValue, setEditGoalValue] = useState(
+    typeof card.goalValue === "number" ? String(card.goalValue) : ""
+  );
+  const [editGoalDirection, setEditGoalDirection] = useState<
+    "lose" | "gain" | "min" | "max"
+  >((card.goalDirection as any) ?? (card.unit === "kg" ? "lose" : "min"));
 
   const stdFarb = card.color ?? STD_FARBEN[card.type] ?? "yellow";
-  const {
-    farbKey,
-    setFarbKey,
-    chartTyp,
-    setChartTyp,
-    gewichtZiel,
-    setGewichtZiel,
-  } = useKartenPrefs(card._id, stdFarb);
+  const { farbKey, setFarbKey, chartTyp, setChartTyp } = useKartenPrefs(
+    card._id,
+    stdFarb
+  );
 
   const [zeigeFarbwahl, setZeigeFarbwahl] = useState(false);
 
@@ -230,6 +235,18 @@ function AthletKarte({
   const istGewicht = card.unit === "kg";
   const farbe = getHex(farbKey);
   const einheit = anzeigeEinheit(card.unit);
+  const zielAktiv = Boolean(card.goalEnabled);
+  const zielWert = typeof card.goalValue === "number" ? card.goalValue : null;
+  const zielRichtung = card.goalDirection ?? (istGewicht ? "lose" : "min");
+
+  const zielLabel =
+    zielRichtung === "lose"
+      ? "Abnehmen"
+      : zielRichtung === "gain"
+      ? "Zunehmen"
+      : zielRichtung === "max"
+      ? "Obergrenze"
+      : "Mindestziel";
 
   const chartUi = useMemo(() => {
     if (resolvedTheme === "dark") {
@@ -302,7 +319,15 @@ function AthletKarte({
       ? +(letzterW - ersterW).toFixed(2)
       : null;
 
-  const trendPos = !istPace && !(istGewicht && gewichtZiel === "abnehmen");
+  const trendPos = (() => {
+    if (istPace) return false;
+
+    if (zielAktiv) {
+      return zielRichtung === "gain" || zielRichtung === "min";
+    }
+
+    return true;
+  })();
   const trendFarbe =
     trend === null || trend === 0
       ? "text-muted"
@@ -317,6 +342,13 @@ function AthletKarte({
   const refLabel = anzeigeDaten.find(
     (d) => d.datumISO === ausgewaehltesdatum
   )?.datum;
+
+  const zielAnzeigeWert =
+    zielAktiv && typeof zielWert === "number"
+      ? invertieren
+        ? +(maxW + minW - zielWert).toFixed(2)
+        : zielWert
+      : null;
 
   return (
     <div
@@ -351,6 +383,12 @@ function AthletKarte({
               {trend} gesamt
             </p>
           )}
+
+          {zielAktiv && typeof zielWert === "number" && (
+            <p className="mt-1 text-[10px] text-[#c99700] dark:text-[#FFD300]/80">
+              Ziel: {zielWert} {einheit} · {zielLabel}
+            </p>
+          )}
         </div>
       </div>
 
@@ -372,26 +410,21 @@ function AthletKarte({
           ))}
         </div>
 
-        {istGewicht && (
-          <div className="flex items-center gap-0.5 rounded-lg border border-subtle bg-surface-2 p-0.5">
-            {(["abnehmen", "zunehmen"] as const).map((g) => (
-              <button
-                key={g}
-                onClick={() => setGewichtZiel(g)}
-                className="rounded-md px-2 py-1 text-[10px] font-medium transition-all"
-                style={
-                  gewichtZiel === g
-                    ? { backgroundColor: farbe, color: "#0f0f13" }
-                    : {
-                        color: resolvedTheme === "dark" ? "#94a3b8" : "#6b7280",
-                      }
-                }
-              >
-                {g === "abnehmen" ? "📉" : "📈"}
-              </button>
-            ))}
-          </div>
-        )}
+        <button
+          onClick={() => {
+            setEditGoalEnabled(Boolean(card.goalEnabled));
+            setEditGoalValue(
+              typeof card.goalValue === "number" ? String(card.goalValue) : ""
+            );
+            setEditGoalDirection(
+              (card.goalDirection as any) ?? (istGewicht ? "lose" : "min")
+            );
+            setShowGoalEdit(true);
+          }}
+          className="rounded-lg border border-subtle bg-surface-2 px-2.5 py-1 text-[10px] font-medium text-secondary transition-all hover:border-strong hover:text-primary"
+        >
+          Ziel bearbeiten
+        </button>
 
         <button
           onClick={() => setZeigeFarbwahl((v) => !v)}
@@ -477,7 +510,21 @@ function AthletKarte({
                 ohneEmoji(card.label),
               ]}
             />
-
+            {zielAktiv && typeof zielAnzeigeWert === "number" && (
+              <ReferenceLine
+                y={zielAnzeigeWert}
+                stroke="#FFD300"
+                strokeWidth={1.5}
+                strokeDasharray="6 3"
+                strokeOpacity={0.9}
+                label={{
+                  value: `Ziel ${zielWert} ${einheit}`,
+                  position: "insideTopRight",
+                  fill: "#FFD300",
+                  fontSize: 10,
+                }}
+              />
+            )}
             {refLabel && (
               <ReferenceLine
                 x={refLabel}
@@ -510,6 +557,113 @@ function AthletKarte({
             )}
           </ComposedChart>
         </ResponsiveContainer>
+      )}
+      {showGoalEdit && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-2xl border border-subtle bg-surface p-6">
+            <div className="mb-5 flex items-center justify-between">
+              <h3 className="font-semibold text-primary">Ziel bearbeiten</h3>
+              <button
+                onClick={() => setShowGoalEdit(false)}
+                className="text-xl leading-none text-muted transition hover:text-primary"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-3 rounded-xl border border-subtle bg-surface-2 p-3">
+              <label className="flex items-center gap-2 text-sm text-primary">
+                <input
+                  type="checkbox"
+                  checked={editGoalEnabled}
+                  onChange={(e) => setEditGoalEnabled(e.target.checked)}
+                />
+                Ziel aktivieren
+              </label>
+
+              {editGoalEnabled && (
+                <>
+                  <input
+                    type="number"
+                    value={editGoalValue}
+                    onChange={(e) => setEditGoalValue(e.target.value)}
+                    placeholder={`Zielwert in ${einheit}`}
+                    step="0.1"
+                    className="w-full rounded-xl border border-subtle bg-surface px-4 py-2.5 text-sm text-primary focus:border-[#FFD300]/50 focus:outline-none"
+                  />
+
+                  <div className="grid grid-cols-2 gap-2">
+                    {(istGewicht
+                      ? [
+                          { key: "lose", label: "📉 Abnehmen" },
+                          { key: "gain", label: "📈 Zunehmen" },
+                        ]
+                      : [
+                          { key: "min", label: "⬆ Mindestziel" },
+                          { key: "max", label: "⬇ Obergrenze" },
+                        ]
+                    ).map((option) => (
+                      <button
+                        key={option.key}
+                        onClick={() => setEditGoalDirection(option.key as any)}
+                        className={`rounded-xl border px-3 py-2 text-xs font-medium transition-all ${
+                          editGoalDirection === option.key
+                            ? "border-[#FFD300]/50 bg-[#FFD300]/10 text-[#FFD300]"
+                            : "border-subtle bg-surface text-muted hover:border-strong hover:text-primary"
+                        }`}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+
+            <div className="mt-5 flex gap-3">
+              <button
+                onClick={() => setShowGoalEdit(false)}
+                className="flex-1 rounded-xl border border-subtle bg-surface-2 py-2.5 text-sm font-medium text-secondary transition-colors hover:border-strong hover:text-primary"
+              >
+                Abbrechen
+              </button>
+              <button
+                onClick={() => {
+                  const parsedGoalValue =
+                    editGoalEnabled && editGoalValue.trim() !== ""
+                      ? parseFloat(editGoalValue)
+                      : null;
+
+                  updateGoal.mutate(
+                    {
+                      athleteId,
+                      cardId: card._id,
+                      goalEnabled: editGoalEnabled,
+                      goalValue: editGoalEnabled ? parsedGoalValue : undefined,
+                      goalDirection: editGoalEnabled
+                        ? editGoalDirection
+                        : undefined,
+                      from: von,
+                      to: bis,
+                    },
+                    {
+                      onSuccess: () => setShowGoalEdit(false),
+                    }
+                  );
+                }}
+                disabled={
+                  updateGoal.isPending ||
+                  (editGoalEnabled &&
+                    (!editGoalValue.trim() ||
+                      Number.isNaN(parseFloat(editGoalValue))))
+                }
+                className="flex-1 rounded-xl bg-[#FFD300] py-2.5 text-sm font-medium text-[#0f0f13] transition-colors hover:bg-[#e6be00] disabled:opacity-40"
+              >
+                {updateGoal.isPending ? "Speichern…" : "Speichern"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
@@ -1213,9 +1367,12 @@ export default function CoachDashboard() {
                 {sortiertStats.map(({ card, entries }: any) => (
                   <AthletKarte
                     key={card._id}
+                    athleteId={ausgewaehltAthleteId!}
                     card={card}
                     entries={entries}
                     ausgewaehltesdatum={ausgewaehltesDate}
+                    von={von}
+                    bis={bis}
                   />
                 ))}
               </div>
