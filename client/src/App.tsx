@@ -15,6 +15,7 @@ import OnboardingPage from "./pages/onboarding/OnboardingPage";
 import ChatPage from "./pages/chat/ChatPage";
 import GlobalChatNotifier from "./components/chat/GlobalChatNotifier";
 import AthleteProfileSettingsPage from "./pages/athlete/AthleteProfileSettingsPage";
+import AthleteAnalyzePage from "./pages/athlete/AthleteAnalyzePage";
 
 const ProtectedRoute = ({
   children,
@@ -113,6 +114,15 @@ export default function App() {
               element={
                 <ProtectedRoute role="athlete">
                   <AthleteProfileSettingsPage />
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/athlete/analyze"
+              element={
+                <ProtectedRoute role="athlete">
+                  <AthleteAnalyzePage />
                 </ProtectedRoute>
               }
             />

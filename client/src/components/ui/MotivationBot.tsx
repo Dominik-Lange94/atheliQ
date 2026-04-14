@@ -1,6 +1,8 @@
 import { useMemo, useState } from "react";
 import { useAiMotivation } from "../../hooks/useAi";
 import spaqBotAvatar from "../../assets/spaq-bot-avatar.png";
+import { useTheme } from "../../hooks/useTheme";
+import SQLoadingScreen from "./SQLoadingScreen";
 
 interface Props {
   hasData?: boolean;
@@ -99,10 +101,13 @@ export default function MotivationBot({ hasData, selectedDate }: Props) {
     [data?.text]
   );
 
+  const { resolvedTheme } = useTheme();
+  const loaderMode = resolvedTheme === "light" ? "light" : "dark";
+
   if (!visible) return null;
 
   return (
-    <div className="mt-5 overflow-hidden rounded-3xl border border-subtle bg-surface shadow-[0_10px_40px_rgba(0,0,0,0.12)] dark:shadow-[0_10px_40px_rgba(0,0,0,0.35)]">
+    <div className="mt-5 overflow-hidden rounded-3xl border border-subtle bg-surface">
       <div className="border-b border-subtle px-4 py-4 sm:px-5">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
@@ -159,9 +164,12 @@ export default function MotivationBot({ hasData, selectedDate }: Props) {
           </div>
         ) : isLoading ? (
           <div className="rounded-2xl border border-subtle bg-surface-2 p-4">
-            <p className="text-sm leading-6 text-muted">
-              SPAQ analysiert gerade deine Daten…
-            </p>
+            <div className="flex flex-col items-center justify-center">
+              <SQLoadingScreen compact mode={loaderMode} className="px-0" />
+              <p className="mt-2 text-sm leading-6 text-muted text-center">
+                SPAQ erstellt gerade deine Motivation…
+              </p>
+            </div>
           </div>
         ) : !data?.text ? (
           <div className="rounded-2xl border border-subtle bg-surface-2 p-4">
