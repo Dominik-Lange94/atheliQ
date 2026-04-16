@@ -45,6 +45,8 @@ import {
   isGoalReached,
   getTrendForCard,
   formatMetricNumber,
+  getChartGoalValue,
+  getValueRange,
 } from "../../lib/metrics";
 
 function toDateStr(d: Date): string {
@@ -144,7 +146,7 @@ function getHex(key: string): string {
 }
 
 function ohneEmoji(label: string): string {
-  return label.replace(/^\[[a-z]+\]\s*/, "").replace(/^\p{Emoji}\s*/u, "");
+  return label.replace(/^\[[a-z]+\]\s*/u, "").replace(/^\p{Emoji}\s*/u, "");
 }
 
 function anzeigeEinheit(unit: string): string {
@@ -209,15 +211,6 @@ function useKartenPrefs(cardId: string, defaultColor: string) {
     chartTyp,
     setChartTyp,
   };
-}
-
-function roundGoalDisplayValue(
-  maxVal: number,
-  minVal: number,
-  goalValue: number,
-  decimals = 2
-) {
-  return Number((maxVal + minVal - goalValue).toFixed(decimals));
 }
 
 function buildDayWindow(
@@ -285,7 +278,6 @@ function AthletKarte({
   const istGewicht = card.unit === "kg";
   const zielAktiv = Boolean(card.goalEnabled);
   const zielWert = typeof card.goalValue === "number" ? card.goalValue : null;
-  const zielRichtung = card.goalDirection ?? (istGewicht ? "lose" : "min");
 
   const chartUi = useMemo(() => {
     if (resolvedTheme === "dark") {
@@ -333,22 +325,32 @@ function AthletKarte({
     });
   }, [entries, normalizedEntries]);
 
-  const numericValues = chartDaten
-    .map((d) => d.wert)
-    .filter((v): v is number => typeof v === "number" && Number.isFinite(v));
+  const rawValues = useMemo(() => chartDaten.map((d) => d._echt), [chartDaten]);
 
-  const maxW = numericValues.length ? Math.max(...numericValues) : 0;
-  const minW = numericValues.length ? Math.min(...numericValues) : 0;
+  const range = useMemo(() => getValueRange(rawValues), [rawValues]);
 
-  const anzeigeDaten = invertYAxis
-    ? chartDaten.map((d) => ({
-        ...d,
-        wert:
-          typeof d.wert === "number"
-            ? Number((maxW + minW - d.wert).toFixed(metricDefinition.decimals))
-            : null,
-      }))
-    : chartDaten;
+  const anzeigeDaten = useMemo(() => {
+    if (!invertYAxis) return chartDaten;
+
+    const min = range.min;
+    const max = range.max;
+
+    if (typeof min !== "number" || typeof max !== "number") return chartDaten;
+
+    return chartDaten.map((d) => ({
+      ...d,
+      wert:
+        typeof d.wert === "number"
+          ? Number((max + min - d.wert).toFixed(metricDefinition.decimals))
+          : null,
+    }));
+  }, [
+    chartDaten,
+    invertYAxis,
+    range.min,
+    range.max,
+    metricDefinition.decimals,
+  ]);
 
   const tagesEintragIndex = entries.findIndex(
     (e: any) => toDateStr(new Date(e.recordedAt)) === ausgewaehltesdatum
@@ -381,9 +383,11 @@ function AthletKarte({
 
   const zielAnzeigeWert =
     zielAktiv && typeof zielWert === "number"
-      ? invertYAxis
-        ? roundGoalDisplayValue(maxW, minW, zielWert, metricDefinition.decimals)
-        : zielWert
+      ? getChartGoalValue({
+          card,
+          goalValue: zielWert,
+          range,
+        })
       : null;
 
   const yValuesForDomain = [
@@ -395,7 +399,10 @@ function AthletKarte({
 
   const yMin = yValuesForDomain.length > 0 ? Math.min(...yValuesForDomain) : 0;
   const yMax = yValuesForDomain.length > 0 ? Math.max(...yValuesForDomain) : 0;
-  const yPadding = Math.max(Math.abs(yMax - yMin) * 0.08, 1);
+  const yPadding =
+    yValuesForDomain.length > 0
+      ? Math.max(Math.abs(yMax - yMin) * 0.08, 0.5)
+      : 1;
 
   const yDomain: [number, number] =
     yValuesForDomain.length > 0 ? [yMin - yPadding, yMax + yPadding] : [0, 10];
@@ -601,7 +608,28 @@ function AthletKarte({
                 dataKey="wert"
                 stroke={farbe}
                 strokeWidth={1.5}
-                dot={false}
+                dot={
+                  zielAktiv && typeof zielWert === "number"
+                    ? (props: any) => {
+                        const { cx, cy, payload } = props;
+                        const met = isGoalReached({
+                          value: payload?._echt,
+                          goalValue: zielWert,
+                          goalMode,
+                        });
+
+                        return (
+                          <circle
+                            key={`dot-${cx}-${cy}`}
+                            cx={cx}
+                            cy={cy}
+                            r={3}
+                            fill={met ? "#ffffff" : farbe}
+                          />
+                        );
+                      }
+                    : false
+                }
                 activeDot={{ r: 4, fill: farbe }}
               />
             )}
@@ -929,12 +957,6 @@ export default function CoachDashboard() {
     })
   );
 
-  const shiftWindowLeft = () => setFensterOffset((o) => o - 1);
-
-  const shiftWindowRight = () => {
-    if (fensterOffset < 0) setFensterOffset((o) => o + 1);
-  };
-
   const datumWaehlen = (ds: string) => {
     setAusgewaehltesDate(ds);
     const diff = Math.round(
@@ -951,7 +973,7 @@ export default function CoachDashboard() {
     const nd = toDateStr(d);
     setAusgewaehltesDate(nd);
 
-    if (!buildDayWindow(fensterOffset).find((t) => t.datumStr === nd)) {
+    if (!tagesFenster.find((t) => t.datumStr === nd)) {
       setFensterOffset((o) => o - 1);
     }
   };
@@ -966,7 +988,7 @@ export default function CoachDashboard() {
     if (nd <= TODAY) {
       setAusgewaehltesDate(nd);
 
-      if (!buildDayWindow(fensterOffset).find((t) => t.datumStr === nd)) {
+      if (!tagesFenster.find((t) => t.datumStr === nd)) {
         setFensterOffset((o) => Math.min(o + 1, 0));
       }
     }
@@ -980,7 +1002,7 @@ export default function CoachDashboard() {
 
   return (
     <div className="min-h-screen bg-app">
-      <header className="flex items-center justify-between border-b border-subtle px-4 sm:px-6 py-4">
+      <header className="flex items-center justify-between border-b border-subtle px-4 py-4 sm:px-6">
         <div className="flex items-center gap-3">
           <BrandLogo imageClassName="h-8 w-auto" />
           <span className="rounded-full border border-[#FFD300]/20 bg-[#FFD300]/10 px-2 py-0.5 text-xs text-[#FFD300]">
@@ -1308,10 +1330,7 @@ export default function CoachDashboard() {
             <div className="rounded-2xl border border-subtle bg-surface p-3">
               <div className="flex items-center gap-2">
                 <button
-                  onClick={() => {
-                    shiftWindowLeft();
-                    vorherigerTag();
-                  }}
+                  onClick={vorherigerTag}
                   className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg border border-subtle bg-surface-2 text-sm text-secondary transition-all hover:border-strong hover:text-primary"
                 >
                   ←
@@ -1375,7 +1394,7 @@ export default function CoachDashboard() {
                           </span>
 
                           {showMonth && (
-                            <span className="text-[8px] text-muted leading-none mt-0.5">
+                            <span className="mt-0.5 text-[8px] leading-none text-muted">
                               {d.toLocaleDateString("de-DE", {
                                 month: "short",
                               })}
@@ -1396,11 +1415,8 @@ export default function CoachDashboard() {
                 </div>
 
                 <button
-                  onClick={() => {
-                    shiftWindowRight();
-                    naechsterTag();
-                  }}
-                  disabled={fensterOffset >= 0 && istHeute}
+                  onClick={naechsterTag}
+                  disabled={istHeute}
                   className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg border border-subtle bg-surface-2 text-sm text-secondary transition-all hover:border-strong hover:text-primary disabled:cursor-not-allowed disabled:opacity-30"
                 >
                   →
