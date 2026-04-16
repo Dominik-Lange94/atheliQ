@@ -144,7 +144,7 @@ function getHex(key: string): string {
 }
 
 function ohneEmoji(label: string): string {
-  return label.replace(/^\p{Emoji}\s*/u, "");
+  return label.replace(/^\[[a-z]+\]\s*/, "").replace(/^\p{Emoji}\s*/u, "");
 }
 
 function anzeigeEinheit(unit: string): string {

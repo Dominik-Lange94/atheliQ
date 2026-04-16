@@ -79,7 +79,7 @@ function getCardColor(card?: Card): string {
 }
 
 function stripEmoji(label: string): string {
-  return label.replace(/^\p{Emoji}\s*/u, "");
+  return label.replace(/^\[[a-z]+\]\s*/, "").replace(/^\p{Emoji}\s*/u, "");
 }
 
 function getDisplayUnit(unit: string): string {

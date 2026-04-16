@@ -78,7 +78,7 @@ function toDateStr(d: Date): string {
 }
 
 function stripEmoji(label: string): string {
-  return label.replace(/^\p{Emoji}\s*/u, "");
+  return label.replace(/^\[[a-z]+\]\s*/, "").replace(/^\p{Emoji}\s*/u, "");
 }
 
 function getCardColor(card?: any): string {
