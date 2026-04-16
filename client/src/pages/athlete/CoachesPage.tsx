@@ -22,7 +22,7 @@ function getDisplayUnit(unit: string): string {
 }
 
 function getCleanLabel(label: string): string {
-  return label.replace(/^\p{Emoji}\s*/u, "");
+  return label.replace(/^\[[a-z]+\]\s*/, "").replace(/^\p{Emoji}\s*/u, "");
 }
 
 function getStatusConfig(status?: "pending" | "active" | "revoked") {
