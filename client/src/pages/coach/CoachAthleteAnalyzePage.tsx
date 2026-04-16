@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 import {
   ResponsiveContainer,
   ComposedChart,
@@ -10,6 +10,9 @@ import {
   CartesianGrid,
   Tooltip,
   ReferenceLine,
+  PieChart,
+  Pie,
+  Cell,
 } from "recharts";
 import { useCoachAthletes, useAthleteStats } from "../../hooks/useStats";
 import { useAuth } from "../../hooks/useAuth";
@@ -17,6 +20,16 @@ import { useTheme } from "../../hooks/useTheme";
 import BrandLogo from "../../components/layout/BrandLogo";
 
 type TimeRangeKey = "1W" | "1M" | "3M" | "1Y" | "custom";
+type ChartMode = "trend" | "goal";
+
+type ChartRow = {
+  date: string;
+  dateISO: string;
+  value: number | null;
+  _real: number | null;
+  recordedAt: string | null;
+  trend: number;
+};
 
 const DEFAULT_COLORS: Record<string, string> = {
   heartrate: "rose",
@@ -74,6 +87,11 @@ function getDisplayUnit(unit: string): string {
   if (u1 && u2) return `${u1} / ${u2}`;
   if (u1) return u1;
   return p1[0]?.trim() || "—";
+}
+
+function formatMetricNumber(value: number | null | undefined, decimals = 2) {
+  if (typeof value !== "number" || !Number.isFinite(value)) return null;
+  return Number(value.toFixed(decimals));
 }
 
 function formatCompactDate(date?: string | null) {
@@ -160,6 +178,77 @@ function getRangeDates(
   };
 }
 
+function getInsight(
+  card: any,
+  trend: any,
+  goalActive: boolean,
+  goalValue: number | null,
+  lastVal: number | null
+) {
+  if (lastVal == null) return null;
+
+  if (goalActive && goalValue != null) {
+    const reached =
+      card.goalDirection === "gain" || card.goalDirection === "min"
+        ? lastVal >= goalValue
+        : lastVal <= goalValue;
+
+    if (reached) return { text: "Ziel erreicht", color: "emerald" };
+  }
+
+  if (trend.direction === "up") {
+    return { text: "Verbesserung", color: "emerald" };
+  }
+
+  if (trend.direction === "down") {
+    return { text: "Verschlechterung", color: "rose" };
+  }
+
+  return { text: "Stabil", color: "gray" };
+}
+
+function ExpandIcon({ className = "h-4 w-4" }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M8 3H3v5" />
+      <path d="M16 3h5v5" />
+      <path d="M21 16v5h-5" />
+      <path d="M8 21H3v-5" />
+      <path d="M3 8l6-6" />
+      <path d="M21 8l-6-6" />
+      <path d="M3 16l6 6" />
+      <path d="M21 16l-6 6" />
+    </svg>
+  );
+}
+
+function CloseIcon({ className = "h-5 w-5" }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M18 6 6 18" />
+      <path d="m6 6 12 12" />
+    </svg>
+  );
+}
+
 function AnalyzeMetricCard({
   card,
   entries,
@@ -171,6 +260,9 @@ function AnalyzeMetricCard({
   latestValue?: number | null;
   resolvedTheme: "light" | "dark";
 }) {
+  const [chartMode, setChartMode] = useState<ChartMode>("trend");
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
   const cardColor = getCardColor(card);
   const displayUnit = getDisplayUnit(card.unit);
   const chartType = card.chartType ?? "line";
@@ -192,6 +284,9 @@ function AnalyzeMetricCard({
         tooltipBorder: `${cardColor}30`,
         tooltipText: "#e2e8f0",
         trend: "rgba(255,255,255,0.45)",
+        goalRest: "#2b2f3a",
+        pieLabel: "#e2e8f0",
+        overlayBg: "rgba(3,6,12,0.72)",
       };
     }
 
@@ -202,8 +297,30 @@ function AnalyzeMetricCard({
       tooltipBorder: `${cardColor}35`,
       tooltipText: "#111827",
       trend: "rgba(15,23,42,0.35)",
+      goalRest: "#e5e7eb",
+      pieLabel: "#111827",
+      overlayBg: "rgba(15,23,42,0.42)",
     };
   }, [resolvedTheme, cardColor]);
+
+  useEffect(() => {
+    if (!isFullscreen) return;
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsFullscreen(false);
+      }
+    };
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", onKeyDown);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [isFullscreen]);
 
   const rawData = (entries ?? []).map((e: any) => {
     let value = e.value;
@@ -216,14 +333,16 @@ function AnalyzeMetricCard({
       value = +(e.value / (e.secondaryValue / 60)).toFixed(1);
     }
 
+    const normalizedValue = formatMetricNumber(value, 2);
+
     return {
       date: new Date(e.recordedAt).toLocaleDateString("de-DE", {
         day: "2-digit",
         month: "short",
       }),
       dateISO: toDateStr(new Date(e.recordedAt)),
-      value,
-      _real: value,
+      value: normalizedValue,
+      _real: normalizedValue,
       recordedAt: e.recordedAt,
     };
   });
@@ -258,11 +377,11 @@ function AnalyzeMetricCard({
       : "text-muted";
 
   const trendValues = movingAverage(
-    rawData.map((d) => d.value),
+    rawData.map((d) => d.value ?? 0),
     Math.min(7, Math.max(1, rawData.length))
   );
 
-  const chartData = rawData.map((d, i) => ({
+  const chartData: ChartRow[] = rawData.map((d, i) => ({
     ...d,
     trend: trendValues[i],
   }));
@@ -270,6 +389,7 @@ function AnalyzeMetricCard({
   const goalMet =
     goalActive && typeof goalValue === "number"
       ? rawData.filter((d) => {
+          if (typeof d._real !== "number") return false;
           if (goalDirection === "gain" || goalDirection === "min") {
             return d._real >= goalValue;
           }
@@ -291,134 +411,173 @@ function AnalyzeMetricCard({
       ? "Obergrenze"
       : "Mindestziel";
 
-  return (
-    <div className="overflow-hidden rounded-3xl border border-subtle bg-surface">
-      <div className="border-b border-subtle px-4 py-4 sm:px-5">
-        <div className="flex items-start justify-between gap-4">
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <span
-                className="inline-block h-2.5 w-2.5 rounded-full"
-                style={{ backgroundColor: cardColor }}
-              />
-              <div className="flex items-center gap-2">
-                <h3 className="truncate text-base font-semibold text-primary">
-                  {stripEmoji(card.label)}
-                </h3>
+  const goalRemaining = Math.max(0, rawData.length - goalMet);
 
-                {insight && (
-                  <span className={`text-xs font-medium ${insightColorClass}`}>
-                    {insight.text}
-                  </span>
-                )}
-              </div>
+  const goalChartData =
+    goalActive && typeof goalValue === "number"
+      ? [
+          { name: "Erreicht", value: goalMet },
+          { name: "Offen", value: goalRemaining },
+        ]
+      : [];
+
+  const showGoalChart =
+    chartMode === "goal" &&
+    goalActive &&
+    typeof goalValue === "number" &&
+    rawData.length > 0;
+
+  const renderMetricVisualization = (heightClass: string) => {
+    if (chartData.length === 0) {
+      return (
+        <div
+          className={`flex ${heightClass} items-center justify-center rounded-2xl border border-subtle bg-surface-2`}
+        >
+          <p className="text-sm text-muted">
+            Keine Daten im gewählten Zeitraum
+          </p>
+        </div>
+      );
+    }
+
+    return (
+      <div className={heightClass}>
+        {showGoalChart ? (
+          <div className="grid h-full gap-4 md:grid-cols-[240px_minmax(0,1fr)]">
+            <div className="flex h-full items-center justify-center rounded-2xl border border-subtle bg-surface-2 p-3">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={goalChartData}
+                    dataKey="value"
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={50}
+                    outerRadius={74}
+                    paddingAngle={3}
+                    stroke="none"
+                  >
+                    <Cell fill={cardColor} />
+                    <Cell fill={chartUi.goalRest} />
+                  </Pie>
+                  <Tooltip
+                    content={({ payload }) => {
+                      if (!payload || !payload.length) return null;
+
+                      const item = payload[0];
+                      return (
+                        <div
+                          style={{
+                            background: chartUi.tooltipBg,
+                            border: `1px solid ${chartUi.tooltipBorder}`,
+                            borderRadius: "12px",
+                            padding: "10px 12px",
+                            fontSize: "13px",
+                            color: chartUi.tooltipText,
+                          }}
+                        >
+                          <div style={{ fontWeight: 600 }}>{item.name}</div>
+                          <div style={{ marginTop: 4 }}>
+                            {item.value} Einträge
+                          </div>
+                        </div>
+                      );
+                    }}
+                  />
+                  <text
+                    x="50%"
+                    y="46%"
+                    textAnchor="middle"
+                    dominantBaseline="middle"
+                    fill={chartUi.pieLabel}
+                    style={{ fontSize: 24, fontWeight: 700 }}
+                  >
+                    {goalPct}%
+                  </text>
+                  <text
+                    x="50%"
+                    y="58%"
+                    textAnchor="middle"
+                    dominantBaseline="middle"
+                    fill={chartUi.tick}
+                    style={{
+                      fontSize: 11,
+                      letterSpacing: "0.08em",
+                      textTransform: "uppercase",
+                    }}
+                  >
+                    erreicht
+                  </text>
+                </PieChart>
+              </ResponsiveContainer>
             </div>
 
-            <p className="mt-1 text-xs text-muted">
-              {displayUnit} · {card.type}
-            </p>
-          </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="flex min-h-[128px] flex-col rounded-2xl border border-subtle bg-surface-2 p-3">
+                <p className="text-[10px] uppercase tracking-[0.16em] text-muted">
+                  Zielmodus
+                </p>
+                <div className="mt-2 flex-1">
+                  <p className="text-sm font-semibold text-primary">
+                    {goalDirectionLabel}
+                  </p>
+                  <p className="mt-1 text-xs text-muted">
+                    Zielwert: {formatMetricNumber(goalValue, 2)} {displayUnit}
+                  </p>
+                </div>
+              </div>
 
-          <div className="rounded-xl border border-subtle bg-surface-2 px-3 py-2 text-right">
-            <p className="text-[10px] uppercase tracking-[0.18em] text-muted">
-              Letzter Wert
-            </p>
-            <p className="text-sm font-semibold text-primary">
-              {typeof latestValue === "number"
-                ? `${latestValue} ${displayUnit}`
-                : "—"}
-            </p>
-            {goalActive && typeof goalValue === "number" && (
-              <p className="mt-1 text-[10px] text-[#c99700] dark:text-[#FFD300]/80">
-                Ziel: {goalValue} {displayUnit}
-              </p>
-            )}
-          </div>
-        </div>
-      </div>
+              <div className="flex min-h-[128px] flex-col rounded-2xl border border-subtle bg-surface-2 p-3">
+                <p className="text-[10px] uppercase tracking-[0.16em] text-muted">
+                  Erreicht
+                </p>
+                <div className="mt-2 flex-1">
+                  <p className="text-sm font-semibold text-primary">
+                    {goalMet} von {rawData.length}
+                  </p>
+                  <p className="mt-1 text-xs text-muted">
+                    Einträge im Zielbereich
+                  </p>
+                </div>
+              </div>
 
-      <div className="grid gap-3 border-b border-subtle px-4 py-4 sm:grid-cols-4 sm:px-5">
-        <div className="rounded-2xl border border-subtle bg-surface-2 p-3">
-          <p className="text-[10px] uppercase tracking-[0.16em] text-muted">
-            Trend
-          </p>
-          <p
-            className={`mt-1 text-sm font-semibold ${
-              trend.direction === "up"
-                ? "text-emerald-500"
-                : trend.direction === "down"
-                ? "text-rose-500"
-                : "text-primary"
-            }`}
-          >
-            {trend.label}
-          </p>
-          <p className="mt-1 text-xs text-muted">
-            {trend.delta === null
-              ? "—"
-              : `${trend.delta > 0 ? "+" : ""}${trend.delta} ${displayUnit}`}
-          </p>
-        </div>
+              <div className="flex min-h-[128px] flex-col rounded-2xl border border-subtle bg-surface-2 p-3">
+                <p className="text-[10px] uppercase tracking-[0.16em] text-muted">
+                  Offen
+                </p>
+                <div className="mt-2 flex-1">
+                  <p className="text-sm font-semibold text-primary">
+                    {goalRemaining}
+                  </p>
+                  <p className="mt-1 text-xs text-muted">
+                    Einträge noch unter Ziel
+                  </p>
+                </div>
+              </div>
 
-        <div className="rounded-2xl border border-subtle bg-surface-2 p-3">
-          <p className="text-[10px] uppercase tracking-[0.16em] text-muted">
-            Einträge
-          </p>
-          <p className="mt-1 text-sm font-semibold text-primary">
-            {rawData.length}
-          </p>
-          <p className="mt-1 text-xs text-muted">im gewählten Zeitraum</p>
-        </div>
-
-        <div className="rounded-2xl border border-subtle bg-surface-2 p-3">
-          <p className="text-[10px] uppercase tracking-[0.16em] text-muted">
-            Durchschnitt
-          </p>
-          <p className="mt-1 text-sm font-semibold text-primary">
-            {typeof avgVal === "number" ? avgVal : "—"}
-          </p>
-          <p className="mt-1 text-xs text-muted">{displayUnit}</p>
-        </div>
-
-        <div className="rounded-2xl border border-subtle bg-surface-2 p-3">
-          <p className="text-[10px] uppercase tracking-[0.16em] text-muted">
-            {goalActive ? "Zielstatus" : "Min / Max"}
-          </p>
-          {goalActive && typeof goalValue === "number" ? (
-            <>
-              <p className="mt-1 text-sm font-semibold text-primary">
-                {goalPct}% erreicht
-              </p>
-              <p className="mt-1 text-xs text-muted">
-                {goalMet} von {rawData.length} Einträgen · {goalDirectionLabel}
-              </p>
-            </>
-          ) : (
-            <>
-              <p className="mt-1 text-sm font-semibold text-primary">
-                {typeof minVal === "number" ? minVal : "—"} /{" "}
-                {typeof maxVal === "number" ? maxVal : "—"}
-              </p>
-              <p className="mt-1 text-xs text-muted">
-                Letzter Eintrag:{" "}
-                {rawData.length
-                  ? formatCompactDate(rawData[rawData.length - 1]?.recordedAt)
-                  : "—"}
-              </p>
-            </>
-          )}
-        </div>
-      </div>
-
-      <div className="px-4 py-4 sm:px-5">
-        {chartData.length === 0 ? (
-          <div className="flex h-64 items-center justify-center rounded-2xl border border-subtle bg-surface-2">
-            <p className="text-sm text-muted">
-              Keine Daten im gewählten Zeitraum
-            </p>
+              <div className="flex min-h-[128px] flex-col rounded-2xl border border-subtle bg-surface-2 p-3">
+                <p className="text-[10px] uppercase tracking-[0.16em] text-muted">
+                  Schnellblick
+                </p>
+                <div className="mt-2 flex-1">
+                  <p className="text-sm font-semibold text-primary">
+                    {goalPct >= 80
+                      ? "Sehr stark"
+                      : goalPct >= 60
+                      ? "Solide"
+                      : goalPct >= 40
+                      ? "Auf Kurs"
+                      : "Ausbaufähig"}
+                  </p>
+                  <p className="mt-1 text-xs text-muted">
+                    Zielerreichung im Zeitraum
+                  </p>
+                </div>
+              </div>
+            </div>
           </div>
         ) : (
-          <ResponsiveContainer width="100%" height={280}>
+          <ResponsiveContainer width="100%" height="100%">
             <ComposedChart
               data={chartData}
               margin={{ top: 8, right: 8, bottom: 0, left: -18 }}
@@ -448,10 +607,9 @@ function AnalyzeMetricCard({
                   const trendItem = payload.find((p) => p.dataKey === "trend");
 
                   const value = valueItem?.payload?._real;
-                  const trend = trendItem?.value;
+                  const trendValue = trendItem?.value;
 
-                  let missing = null;
-
+                  let missing: number | null = null;
                   if (
                     goalActive &&
                     typeof goalValue === "number" &&
@@ -480,20 +638,26 @@ function AnalyzeMetricCard({
                       </div>
 
                       <div style={{ color: cardColor, fontWeight: 600 }}>
-                        {value} {displayUnit}
+                        {formatMetricNumber(value, 2)} {displayUnit}
                       </div>
 
                       {goalActive &&
                         typeof goalValue === "number" &&
                         missing !== null && (
                           <div style={{ fontSize: 12, opacity: 0.8 }}>
-                            Noch {missing} {displayUnit} bis Ziel
+                            Noch {formatMetricNumber(missing, 2)} {displayUnit}{" "}
+                            bis Ziel
                           </div>
                         )}
 
-                      {trend !== undefined && (
+                      {trendValue !== undefined && (
                         <div style={{ fontSize: 12, opacity: 0.6 }}>
-                          Trend: {trend} {displayUnit}
+                          Trend:{" "}
+                          {formatMetricNumber(
+                            typeof trendValue === "number" ? trendValue : null,
+                            2
+                          )}{" "}
+                          {displayUnit}
                         </div>
                       )}
                     </div>
@@ -519,7 +683,10 @@ function AnalyzeMetricCard({
                   strokeDasharray="6 3"
                   strokeOpacity={0.9}
                   label={{
-                    value: `Ziel: ${goalValue} ${displayUnit}`,
+                    value: `Ziel: ${formatMetricNumber(
+                      goalValue,
+                      2
+                    )} ${displayUnit}`,
                     position: "insideTopRight",
                     fill: "#FFD300",
                     fontSize: 10,
@@ -547,10 +714,15 @@ function AnalyzeMetricCard({
                     goalActive && typeof goalValue === "number"
                       ? (props: any) => {
                           const { cx, cy, payload } = props;
+                          const realValue = payload?._real;
+
                           const met =
-                            goalDirection === "gain" || goalDirection === "min"
-                              ? payload._real >= goalValue
-                              : payload._real <= goalValue;
+                            typeof realValue === "number"
+                              ? goalDirection === "gain" ||
+                                goalDirection === "min"
+                                ? realValue >= goalValue
+                                : realValue <= goalValue
+                              : false;
 
                           return (
                             <circle
@@ -581,33 +753,311 @@ function AnalyzeMetricCard({
           </ResponsiveContainer>
         )}
       </div>
-    </div>
+    );
+  };
+
+  return (
+    <>
+      <div className="flex h-full flex-col overflow-hidden rounded-3xl border border-subtle bg-surface">
+        <div className="border-b border-subtle px-4 py-4 sm:px-5">
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <span
+                  className="inline-block h-2.5 w-2.5 rounded-full"
+                  style={{ backgroundColor: cardColor }}
+                />
+                <div className="flex min-w-0 items-center gap-2">
+                  <h3 className="truncate text-base font-semibold text-primary">
+                    {stripEmoji(card.label)}
+                  </h3>
+
+                  {insight && (
+                    <span
+                      className={`text-xs font-medium ${insightColorClass}`}
+                    >
+                      {insight.text}
+                    </span>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => setIsFullscreen(true)}
+                    className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-subtle bg-surface-2 text-secondary transition-all hover:border-strong hover:text-primary"
+                    title="Chart vergrößern"
+                    aria-label={`Chart für ${stripEmoji(
+                      card.label
+                    )} im Vollbild öffnen`}
+                  >
+                    <ExpandIcon className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              </div>
+
+              <p className="mt-1 text-xs text-muted">
+                {displayUnit} · {card.type}
+              </p>
+            </div>
+
+            <div className="rounded-xl border border-subtle bg-surface-2 px-3 py-2 text-right">
+              <p className="text-[10px] uppercase tracking-[0.18em] text-muted">
+                Letzter Wert
+              </p>
+              <p className="text-sm font-semibold text-primary">
+                {typeof latestValue === "number"
+                  ? `${formatMetricNumber(latestValue, 2)} ${displayUnit}`
+                  : "—"}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid gap-3 border-b border-subtle px-4 py-4 sm:grid-cols-4 sm:px-5">
+          <div className="flex min-h-[104px] flex-col rounded-2xl border border-subtle bg-surface-2 p-3">
+            <p className="text-[10px] uppercase tracking-[0.16em] text-muted">
+              Trend
+            </p>
+            <div className="mt-2 flex-1">
+              <p
+                className={`text-sm font-semibold ${
+                  trend.direction === "up"
+                    ? "text-emerald-500"
+                    : trend.direction === "down"
+                    ? "text-rose-500"
+                    : "text-primary"
+                }`}
+              >
+                {trend.label}
+              </p>
+              <p className="mt-1 text-xs text-muted">
+                {trend.delta === null
+                  ? "—"
+                  : `${trend.delta > 0 ? "+" : ""}${formatMetricNumber(
+                      trend.delta,
+                      2
+                    )} ${displayUnit}`}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex min-h-[104px] flex-col rounded-2xl border border-subtle bg-surface-2 p-3">
+            <p className="text-[10px] uppercase tracking-[0.16em] text-muted">
+              Einträge
+            </p>
+            <div className="mt-2 flex-1">
+              <p className="text-sm font-semibold text-primary">
+                {rawData.length}
+              </p>
+              <p className="mt-1 text-xs text-muted">im gewählten Zeitraum</p>
+            </div>
+          </div>
+
+          <div className="flex min-h-[104px] flex-col rounded-2xl border border-subtle bg-surface-2 p-3">
+            <p className="text-[10px] uppercase tracking-[0.16em] text-muted">
+              Durchschnitt
+            </p>
+            <div className="mt-2 flex-1">
+              <p className="text-sm font-semibold text-primary">
+                {formatMetricNumber(avgVal, 2) ?? "—"}
+              </p>
+              <p className="mt-1 text-xs text-muted">{displayUnit}</p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => {
+              if (
+                !goalActive ||
+                typeof goalValue !== "number" ||
+                rawData.length === 0
+              ) {
+                return;
+              }
+              setChartMode((prev) => (prev === "trend" ? "goal" : "trend"));
+            }}
+            className={`flex min-h-[104px] flex-col rounded-2xl border border-subtle bg-surface-2 p-3 text-left transition-all ${
+              goalActive && typeof goalValue === "number" && rawData.length > 0
+                ? "cursor-pointer hover:border-[#FFD300]/40 hover:bg-[#FFD300]/5"
+                : "cursor-default"
+            }`}
+          >
+            <p className="text-[10px] uppercase tracking-[0.16em] text-muted">
+              {goalActive ? "Zielstatus" : "Min / Max"}
+            </p>
+
+            <div className="mt-2 flex-1">
+              {goalActive && typeof goalValue === "number" ? (
+                <>
+                  <p className="text-sm font-semibold text-primary">
+                    {goalPct}% erreicht
+                  </p>
+                  <p className="mt-1 text-[10px] font-medium text-[#c99700] dark:text-[#FFD300]">
+                    Ziel: {formatMetricNumber(goalValue, 2)} {displayUnit}
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="text-sm font-semibold text-primary">
+                    {formatMetricNumber(minVal, 2) ?? "—"} /{" "}
+                    {formatMetricNumber(maxVal, 2) ?? "—"}
+                  </p>
+                  <p className="mt-1 text-xs text-muted">
+                    Letzter Eintrag:{" "}
+                    {rawData.length
+                      ? formatCompactDate(
+                          rawData[rawData.length - 1]?.recordedAt
+                        )
+                      : "—"}
+                  </p>
+                </>
+              )}
+            </div>
+          </button>
+        </div>
+
+        <div className="flex-1 px-4 py-4 sm:px-5">
+          {renderMetricVisualization("h-[280px]")}
+        </div>
+      </div>
+
+      {isFullscreen && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6"
+          style={{ background: chartUi.overlayBg }}
+          onClick={() => setIsFullscreen(false)}
+        >
+          <div
+            className="flex h-[92vh] w-full max-w-[1500px] flex-col overflow-hidden rounded-[28px] border border-subtle bg-app shadow-[0_24px_80px_rgba(0,0,0,0.35)]"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="border-b border-subtle px-5 py-4 sm:px-6">
+              <div className="flex items-start justify-between gap-4">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span
+                      className="inline-block h-2.5 w-2.5 rounded-full"
+                      style={{ backgroundColor: cardColor }}
+                    />
+                    <h2 className="truncate text-lg font-semibold text-primary">
+                      {stripEmoji(card.label)}
+                    </h2>
+
+                    {insight && (
+                      <span
+                        className={`text-sm font-medium ${insightColorClass}`}
+                      >
+                        {insight.text}
+                      </span>
+                    )}
+                  </div>
+
+                  <p className="mt-1 text-sm text-muted">
+                    {displayUnit} · {card.type} · Vollansicht
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  {goalActive &&
+                    typeof goalValue === "number" &&
+                    rawData.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setChartMode((prev) =>
+                            prev === "trend" ? "goal" : "trend"
+                          )
+                        }
+                        className="rounded-xl border border-subtle bg-surface px-3 py-2 text-xs font-medium text-secondary transition-all hover:border-strong hover:text-primary"
+                      >
+                        {chartMode === "trend" ? "Zielansicht" : "Verlauf"}
+                      </button>
+                    )}
+
+                  <button
+                    type="button"
+                    onClick={() => setIsFullscreen(false)}
+                    className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-subtle bg-surface text-secondary transition-all hover:border-strong hover:text-primary"
+                    title="Schließen"
+                    aria-label="Vollansicht schließen"
+                  >
+                    <CloseIcon />
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid gap-3 border-b border-subtle px-5 py-4 sm:grid-cols-2 xl:grid-cols-4 sm:px-6">
+              <div className="rounded-2xl border border-subtle bg-surface p-4">
+                <p className="text-[10px] uppercase tracking-[0.16em] text-muted">
+                  Trend
+                </p>
+                <p
+                  className={`mt-2 text-base font-semibold ${
+                    trend.direction === "up"
+                      ? "text-emerald-500"
+                      : trend.direction === "down"
+                      ? "text-rose-500"
+                      : "text-primary"
+                  }`}
+                >
+                  {trend.label}
+                </p>
+                <p className="mt-1 text-sm text-muted">
+                  {trend.delta === null
+                    ? "—"
+                    : `${trend.delta > 0 ? "+" : ""}${formatMetricNumber(
+                        trend.delta,
+                        2
+                      )} ${displayUnit}`}
+                </p>
+              </div>
+
+              <div className="rounded-2xl border border-subtle bg-surface p-4">
+                <p className="text-[10px] uppercase tracking-[0.16em] text-muted">
+                  Einträge
+                </p>
+                <p className="mt-2 text-base font-semibold text-primary">
+                  {rawData.length}
+                </p>
+                <p className="mt-1 text-sm text-muted">im Zeitraum</p>
+              </div>
+
+              <div className="rounded-2xl border border-subtle bg-surface p-4">
+                <p className="text-[10px] uppercase tracking-[0.16em] text-muted">
+                  Durchschnitt
+                </p>
+                <p className="mt-2 text-base font-semibold text-primary">
+                  {formatMetricNumber(avgVal, 2) ?? "—"}
+                </p>
+                <p className="mt-1 text-sm text-muted">{displayUnit}</p>
+              </div>
+
+              <div className="rounded-2xl border border-subtle bg-surface p-4">
+                <p className="text-[10px] uppercase tracking-[0.16em] text-muted">
+                  Letzter Wert
+                </p>
+                <p className="mt-2 text-base font-semibold text-primary">
+                  {typeof latestValue === "number"
+                    ? `${formatMetricNumber(latestValue, 2)} ${displayUnit}`
+                    : "—"}
+                </p>
+                {goalActive && typeof goalValue === "number" && (
+                  <p className="mt-1 text-sm text-[#c99700] dark:text-[#FFD300]">
+                    Ziel: {formatMetricNumber(goalValue, 2)} {displayUnit}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <div className="min-h-0 flex-1 px-5 py-5 sm:px-6">
+              {renderMetricVisualization("h-full")}
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
-}
-
-function getInsight(
-  card: any,
-  trend: any,
-  goalActive: boolean,
-  goalValue: number | null,
-  lastVal: number | null
-) {
-  if (!lastVal) return null;
-
-  if (goalActive && goalValue != null) {
-    const reached =
-      card.goalDirection === "gain" || card.goalDirection === "min"
-        ? lastVal >= goalValue
-        : lastVal <= goalValue;
-
-    if (reached) return { text: "Ziel erreicht", color: "emerald" };
-  }
-
-  if (trend.direction === "up")
-    return { text: "Verbesserung", color: "emerald" };
-  if (trend.direction === "down") return { text: "Rückgang", color: "rose" };
-
-  return { text: "Stabil", color: "gray" };
 }
 
 export default function CoachAthleteAnalyzePage() {
@@ -761,7 +1211,7 @@ export default function CoachAthleteAnalyzePage() {
             </p>
             <p className="mt-1 text-2xl font-semibold text-primary">
               {typeof kpis.latestWeight === "number"
-                ? `${kpis.latestWeight} kg`
+                ? `${formatMetricNumber(kpis.latestWeight, 2)} kg`
                 : "—"}
             </p>
           </div>
@@ -810,14 +1260,14 @@ export default function CoachAthleteAnalyzePage() {
                 type="date"
                 value={customFrom}
                 onChange={(e) => setCustomFrom(e.target.value)}
-                className="rounded-xl border border-subtle bg-surface-2 px-3 py-2 text-sm text-primary focus:border-[#FFD300]/50 focus:outline-none"
+                className="themed-date-input rounded-xl border border-subtle bg-surface-2 px-3 py-2 text-sm text-primary focus:border-[#FFD300]/50 focus:outline-none"
               />
               <span className="text-sm text-muted">bis</span>
               <input
                 type="date"
                 value={customTo}
                 onChange={(e) => setCustomTo(e.target.value)}
-                className="rounded-xl border border-subtle bg-surface-2 px-3 py-2 text-sm text-primary focus:border-[#FFD300]/50 focus:outline-none"
+                className="themed-date-input rounded-xl border border-subtle bg-surface-2 px-3 py-2 text-sm text-primary focus:border-[#FFD300]/50 focus:outline-none"
               />
             </div>
           )}
@@ -864,7 +1314,7 @@ export default function CoachAthleteAnalyzePage() {
             </p>
           </div>
         ) : (
-          <div className="grid gap-4 xl:grid-cols-2">
+          <div className="grid auto-rows-fr gap-4 xl:grid-cols-2">
             {filteredStats.map((item: any) => {
               const latestValue =
                 item.entries?.[item.entries.length - 1]?.value ?? null;
