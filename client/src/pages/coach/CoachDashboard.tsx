@@ -37,6 +37,15 @@ import { useChatUnread } from "../../hooks/useChatUnread";
 import { useTheme } from "../../hooks/useTheme";
 import ThemeToggle from "../../components/layout/ThemeToggle";
 import BrandLogo from "../../components/layout/BrandLogo";
+import {
+  resolveMetricDefinition,
+  normalizeMetricEntries,
+  shouldInvertYAxis,
+  resolveGoalMode,
+  isGoalReached,
+  getTrendForCard,
+  formatMetricNumber,
+} from "../../lib/metrics";
 
 function toDateStr(d: Date): string {
   return d.toISOString().split("T")[0];
@@ -62,7 +71,7 @@ const ZEITRAEUME = [
   { key: "3M", label: "3M", days: 90 },
   { key: "1J", label: "1J", days: 365 },
   { key: "frei", label: "Frei", days: 0 },
-];
+] as const;
 
 interface ZeitraumState {
   key: string;
@@ -84,22 +93,27 @@ function getInitials(name?: string) {
 
 function berechneVonBis(z: ZeitraumState): { von: string; bis: string } {
   if (z.key === "frei") return { von: z.freiVon ?? "", bis: z.freiBis ?? "" };
+
   const r = ZEITRAEUME.find((t) => t.key === z.key)!;
   const bisD = new Date(TODAY + "T12:00:00");
   bisD.setDate(bisD.getDate() - z.offset * r.days);
+
   const vonD = new Date(bisD);
   vonD.setDate(vonD.getDate() - r.days + 1);
+
   return { von: toDateStr(vonD), bis: toDateStr(bisD) };
 }
 
 function zeitraumLabel(z: ZeitraumState): string {
   if (z.key === "frei") return `${z.freiVon ?? "?"} – ${z.freiBis ?? "?"}`;
+
   const { von, bis } = berechneVonBis(z);
   const fmt = (s: string) =>
     new Date(s + "T12:00:00").toLocaleDateString("de-DE", {
       day: "2-digit",
       month: "short",
     });
+
   return `${fmt(von)} – ${fmt(bis)}`;
 }
 
@@ -123,7 +137,7 @@ const FARB_OPTIONEN = [
   { key: "purple", hex: "#a855f7", dot: "bg-purple-400" },
   { key: "pink", hex: "#ec4899", dot: "bg-pink-400" },
   { key: "yellow", hex: "#FFD300", dot: "bg-[#FFD300]" },
-];
+] as const;
 
 function getHex(key: string): string {
   return FARB_OPTIONEN.find((c) => c.key === key)?.hex ?? "#FFD300";
@@ -135,18 +149,22 @@ function ohneEmoji(label: string): string {
 
 function anzeigeEinheit(unit: string): string {
   if (!unit.startsWith("custom||")) return unit;
+
   const parts = unit.split("||").slice(1);
   const p1 = parts[0]?.split(":") ?? [];
   const p2 = parts[1]?.split(":") ?? [];
   const u1 = p1[1]?.trim() ?? "";
   const u2 = p2[1]?.trim() ?? "";
+
   if (u1 && u2) return `${u1} / ${u2}`;
   if (u1) return u1;
   return p1[0]?.trim() || "—";
 }
 
-function fmtWert(value: number): string {
-  return parseFloat(parseFloat(value.toFixed(2)).toString()).toString();
+function fmtWert(value: number | null | undefined, decimals = 2): string {
+  const formatted = formatMetricNumber(value, decimals);
+  if (formatted == null) return "—";
+  return parseFloat(formatted.toString()).toString();
 }
 
 function useKartenPrefs(cardId: string, defaultColor: string) {
@@ -169,7 +187,7 @@ function useKartenPrefs(cardId: string, defaultColor: string) {
     saved?.chartTyp ?? "line"
   );
 
-  const save = (n: any) => {
+  const save = (n: { farbKey: string; chartTyp: string }) => {
     try {
       localStorage.setItem(sk, JSON.stringify(n));
     } catch {}
@@ -191,6 +209,33 @@ function useKartenPrefs(cardId: string, defaultColor: string) {
     chartTyp,
     setChartTyp,
   };
+}
+
+function roundGoalDisplayValue(
+  maxVal: number,
+  minVal: number,
+  goalValue: number,
+  decimals = 2
+) {
+  return Number((maxVal + minVal - goalValue).toFixed(decimals));
+}
+
+function buildDayWindow(
+  windowOffset: number
+): { datumStr: string; tag: number; wochentag: string }[] {
+  const tage = [];
+  for (let i = windowOffset - 7; i <= windowOffset; i++) {
+    const d = new Date(TODAY + "T12:00:00");
+    d.setDate(d.getDate() + i);
+    tage.push({
+      datumStr: toDateStr(d),
+      tag: d.getDate(),
+      wochentag: d
+        .toLocaleDateString("de-DE", { weekday: "short" })
+        .slice(0, 2),
+    });
+  }
+  return tage;
 }
 
 function AthletKarte({
@@ -230,23 +275,17 @@ function AthletKarte({
 
   const [zeigeFarbwahl, setZeigeFarbwahl] = useState(false);
 
-  const istPace = card.unit === "min/km";
-  const istSpeed = card.unit === "km/h";
-  const istGewicht = card.unit === "kg";
   const farbe = getHex(farbKey);
   const einheit = anzeigeEinheit(card.unit);
+
+  const metricDefinition = useMemo(() => resolveMetricDefinition(card), [card]);
+  const invertYAxis = useMemo(() => shouldInvertYAxis(card), [card]);
+  const goalMode = useMemo(() => resolveGoalMode(card), [card]);
+
+  const istGewicht = card.unit === "kg";
   const zielAktiv = Boolean(card.goalEnabled);
   const zielWert = typeof card.goalValue === "number" ? card.goalValue : null;
   const zielRichtung = card.goalDirection ?? (istGewicht ? "lose" : "min");
-
-  const zielLabel =
-    zielRichtung === "lose"
-      ? "Abnehmen"
-      : zielRichtung === "gain"
-      ? "Zunehmen"
-      : zielRichtung === "max"
-      ? "Obergrenze"
-      : "Mindestziel";
 
   const chartUi = useMemo(() => {
     if (resolvedTheme === "dark") {
@@ -266,78 +305,75 @@ function AthletKarte({
     };
   }, [resolvedTheme]);
 
-  const chartDaten = entries.map((e: any) => {
-    let v = e.value;
-    if (istPace && e.secondaryValue && e.value) {
-      v = +(e.secondaryValue / e.value).toFixed(2);
-    } else if (istSpeed && e.secondaryValue && e.value) {
-      v = +(e.value / (e.secondaryValue / 60)).toFixed(1);
-    }
+  const normalizedEntries = useMemo(
+    () => normalizeMetricEntries(card, entries ?? []),
+    [card, entries]
+  );
 
-    return {
-      datum: new Date(e.recordedAt).toLocaleDateString("de-DE", {
-        day: "2-digit",
-        month: "short",
-      }),
-      datumISO: toDateStr(new Date(e.recordedAt)),
-      wert: v,
-      _echt: v,
-    };
-  });
+  const chartDaten = useMemo(() => {
+    return normalizedEntries.map((entry, index) => {
+      const original = entries?.[index];
+      const recordedAt = original?.recordedAt
+        ? new Date(original.recordedAt)
+        : null;
+      const isValidDate =
+        recordedAt instanceof Date && !Number.isNaN(recordedAt.getTime());
 
-  const maxW = chartDaten.length
-    ? Math.max(...chartDaten.map((d) => d.wert))
-    : 0;
-  const minW = chartDaten.length
-    ? Math.min(...chartDaten.map((d) => d.wert))
-    : 0;
+      return {
+        datum: isValidDate
+          ? recordedAt.toLocaleDateString("de-DE", {
+              day: "2-digit",
+              month: "short",
+            })
+          : "—",
+        datumISO: isValidDate ? toDateStr(recordedAt) : "",
+        wert: entry.rawValue,
+        _echt: entry.rawValue,
+      };
+    });
+  }, [entries, normalizedEntries]);
 
-  const invertieren = istPace;
-  const anzeigeDaten = invertieren
+  const numericValues = chartDaten
+    .map((d) => d.wert)
+    .filter((v): v is number => typeof v === "number" && Number.isFinite(v));
+
+  const maxW = numericValues.length ? Math.max(...numericValues) : 0;
+  const minW = numericValues.length ? Math.min(...numericValues) : 0;
+
+  const anzeigeDaten = invertYAxis
     ? chartDaten.map((d) => ({
         ...d,
-        wert: +(maxW + minW - d.wert).toFixed(2),
+        wert:
+          typeof d.wert === "number"
+            ? Number((maxW + minW - d.wert).toFixed(metricDefinition.decimals))
+            : null,
       }))
     : chartDaten;
 
-  const tagesEintrag = entries.find(
+  const tagesEintragIndex = entries.findIndex(
     (e: any) => toDateStr(new Date(e.recordedAt)) === ausgewaehltesdatum
   );
 
-  const tagesWert = tagesEintrag
-    ? istPace && tagesEintrag.secondaryValue && tagesEintrag.value
-      ? (tagesEintrag.secondaryValue / tagesEintrag.value).toFixed(2)
-      : istSpeed && tagesEintrag.secondaryValue && tagesEintrag.value
-      ? (tagesEintrag.value / (tagesEintrag.secondaryValue / 60)).toFixed(1)
-      : fmtWert(tagesEintrag.value)
-    : null;
-
-  const letzterW = chartDaten[chartDaten.length - 1]?._echt;
-  const ersterW = chartDaten[0]?._echt;
-  const trend =
-    letzterW != null && ersterW != null
-      ? +(letzterW - ersterW).toFixed(2)
+  const tagesWert =
+    tagesEintragIndex >= 0
+      ? normalizedEntries[tagesEintragIndex]?.displayValue ?? null
       : null;
 
-  const trendPos = (() => {
-    if (istPace) return false;
+  const letzterW = chartDaten[chartDaten.length - 1]?._echt ?? null;
+  const ersterW = chartDaten[0]?._echt ?? null;
 
-    if (zielAktiv) {
-      return zielRichtung === "gain" || zielRichtung === "min";
-    }
+  const trend = getTrendForCard({
+    card,
+    first: ersterW,
+    last: letzterW,
+  });
 
-    return true;
-  })();
   const trendFarbe =
-    trend === null || trend === 0
-      ? "text-muted"
-      : trendPos
-      ? trend > 0
-        ? "text-green-500 dark:text-green-400"
-        : "text-red-500 dark:text-red-400"
-      : trend < 0
+    trend.performance === "better"
       ? "text-green-500 dark:text-green-400"
-      : "text-red-500 dark:text-red-400";
+      : trend.performance === "worse"
+      ? "text-red-500 dark:text-red-400"
+      : "text-muted";
 
   const refLabel = anzeigeDaten.find(
     (d) => d.datumISO === ausgewaehltesdatum
@@ -345,10 +381,24 @@ function AthletKarte({
 
   const zielAnzeigeWert =
     zielAktiv && typeof zielWert === "number"
-      ? invertieren
-        ? +(maxW + minW - zielWert).toFixed(2)
+      ? invertYAxis
+        ? roundGoalDisplayValue(maxW, minW, zielWert, metricDefinition.decimals)
         : zielWert
       : null;
+
+  const yValuesForDomain = [
+    ...anzeigeDaten
+      .map((d) => d.wert)
+      .filter((v): v is number => typeof v === "number" && Number.isFinite(v)),
+    ...(typeof zielAnzeigeWert === "number" ? [zielAnzeigeWert] : []),
+  ];
+
+  const yMin = yValuesForDomain.length > 0 ? Math.min(...yValuesForDomain) : 0;
+  const yMax = yValuesForDomain.length > 0 ? Math.max(...yValuesForDomain) : 0;
+  const yPadding = Math.max(Math.abs(yMax - yMin) * 0.08, 1);
+
+  const yDomain: [number, number] =
+    yValuesForDomain.length > 0 ? [yMin - yPadding, yMax + yPadding] : [0, 10];
 
   return (
     <div
@@ -365,28 +415,26 @@ function AthletKarte({
 
         <div className="text-right">
           <p className="font-semibold" style={{ color: farbe }}>
-            {tagesWert ??
-              (chartDaten[chartDaten.length - 1]?._echt != null
-                ? fmtWert(chartDaten[chartDaten.length - 1]._echt)
-                : "—")}
+            {tagesWert != null
+              ? fmtWert(tagesWert, metricDefinition.decimals)
+              : chartDaten[chartDaten.length - 1]?._echt != null
+              ? fmtWert(
+                  chartDaten[chartDaten.length - 1]._echt,
+                  metricDefinition.decimals
+                )
+              : "—"}
           </p>
 
-          {tagesWert && ausgewaehltesdatum !== TODAY && (
+          {tagesWert != null && ausgewaehltesdatum !== TODAY && (
             <p className="text-[10px] text-muted">
               {datumAnzeige(ausgewaehltesdatum)}
             </p>
           )}
 
-          {trend !== null && trend !== 0 && (
+          {trend.delta !== null && trend.delta !== 0 && (
             <p className={`text-xs ${trendFarbe}`}>
-              {trend > 0 ? "+" : ""}
-              {trend} gesamt
-            </p>
-          )}
-
-          {zielAktiv && typeof zielWert === "number" && (
-            <p className="mt-1 text-[10px] text-[#c99700] dark:text-[#FFD300]/80">
-              Ziel: {zielWert} {einheit} · {zielLabel}
+              {trend.delta > 0 ? "+" : ""}
+              {fmtWert(trend.delta, metricDefinition.decimals)} gesamt
             </p>
           )}
         </div>
@@ -423,7 +471,9 @@ function AthletKarte({
           }}
           className="rounded-lg border border-subtle bg-surface-2 px-2.5 py-1 text-[10px] font-medium text-secondary transition-all hover:border-strong hover:text-primary"
         >
-          Ziel bearbeiten
+          {zielAktiv && typeof zielWert === "number"
+            ? "Ziel bearbeiten"
+            : "Ziel erstellen"}
         </button>
 
         <button
@@ -482,6 +532,7 @@ function AthletKarte({
             margin={{ top: 4, right: 4, bottom: 0, left: -24 }}
           >
             <CartesianGrid strokeDasharray="3 3" stroke={chartUi.grid} />
+
             <XAxis
               dataKey="datum"
               tick={{ fill: chartUi.tick, fontSize: 10 }}
@@ -489,12 +540,14 @@ function AthletKarte({
               tickLine={false}
               interval="preserveStartEnd"
             />
+
             <YAxis
               tick={{ fill: chartUi.tick, fontSize: 10 }}
               axisLine={false}
               tickLine={false}
-              domain={["auto", "auto"]}
+              domain={yDomain}
             />
+
             <Tooltip
               contentStyle={{
                 background: chartUi.tooltipBg,
@@ -505,11 +558,13 @@ function AthletKarte({
               }}
               formatter={(_v: any, _n: any, props: any) => [
                 <span style={{ color: farbe }}>
-                  {props.payload._echt} {einheit}
+                  {fmtWert(props.payload._echt, metricDefinition.decimals)}{" "}
+                  {einheit}
                 </span>,
                 ohneEmoji(card.label),
               ]}
             />
+
             {zielAktiv && typeof zielAnzeigeWert === "number" && (
               <ReferenceLine
                 y={zielAnzeigeWert}
@@ -517,14 +572,9 @@ function AthletKarte({
                 strokeWidth={1.5}
                 strokeDasharray="6 3"
                 strokeOpacity={0.9}
-                label={{
-                  value: `Ziel ${zielWert} ${einheit}`,
-                  position: "insideTopRight",
-                  fill: "#FFD300",
-                  fontSize: 10,
-                }}
               />
             )}
+
             {refLabel && (
               <ReferenceLine
                 x={refLabel}
@@ -558,11 +608,14 @@ function AthletKarte({
           </ComposedChart>
         </ResponsiveContainer>
       )}
+
       {showGoalEdit && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
           <div className="w-full max-w-sm rounded-2xl border border-subtle bg-surface p-6">
             <div className="mb-5 flex items-center justify-between">
-              <h3 className="font-semibold text-primary">Ziel bearbeiten</h3>
+              <h3 className="font-semibold text-primary">
+                {zielAktiv ? "Ziel bearbeiten" : "Ziel erstellen"}
+              </h3>
               <button
                 onClick={() => setShowGoalEdit(false)}
                 className="text-xl leading-none text-muted transition hover:text-primary"
@@ -627,6 +680,7 @@ function AthletKarte({
               >
                 Abbrechen
               </button>
+
               <button
                 onClick={() => {
                   const parsedGoalValue =
@@ -670,13 +724,19 @@ function AthletKarte({
 }
 
 function SortierbarKarte({
+  athleteId,
   card,
   entries,
   ausgewaehltesdatum,
+  von,
+  bis,
 }: {
+  athleteId: string;
   card: any;
   entries: any[];
   ausgewaehltesdatum: string;
+  von: string;
+  bis: string;
 }) {
   const {
     attributes,
@@ -713,9 +773,12 @@ function SortierbarKarte({
 
       <div className="pointer-events-none opacity-60">
         <AthletKarte
+          athleteId={athleteId}
           card={card}
           entries={entries}
           ausgewaehltesdatum={ausgewaehltesdatum}
+          von={von}
+          bis={bis}
         />
       </div>
     </div>
@@ -740,24 +803,10 @@ export default function CoachDashboard() {
   const profileMenuRef = useRef<HTMLDivElement | null>(null);
 
   const istHeute = ausgewaehltesDate === TODAY;
-
-  const tagesFenster = useMemo(() => {
-    const tage = [];
-    for (let i = fensterOffset - 7; i <= fensterOffset; i++) {
-      const d = new Date(TODAY + "T12:00:00");
-      d.setDate(d.getDate() + i);
-      tage.push({
-        datumStr: toDateStr(d),
-        tag: d.getDate(),
-        wochentag: d
-          .toLocaleDateString("de-DE", {
-            weekday: "short",
-          })
-          .slice(0, 2),
-      });
-    }
-    return tage;
-  }, [fensterOffset]);
+  const tagesFenster = useMemo(
+    () => buildDayWindow(fensterOffset),
+    [fensterOffset]
+  );
 
   const [zeitraum, setZeitraum] = useState<ZeitraumState>({
     key: "1M",
@@ -857,7 +906,7 @@ export default function CoachDashboard() {
     } catch {
       setKartenReihenfolge(normalized.map((s: any) => s.card._id));
     }
-  }, [ausgewaehltAthleteId]);
+  }, [ausgewaehltAthleteId, athleteStats]);
 
   const sortiertStats = useMemo(() => {
     const normalized = Array.isArray(athleteStats)
@@ -880,27 +929,10 @@ export default function CoachDashboard() {
     })
   );
 
-  const vorherigerTag = () => {
-    const d = new Date(ausgewaehltesDate + "T12:00:00");
-    d.setDate(d.getDate() - 1);
-    const nd = toDateStr(d);
-    setAusgewaehltesDate(nd);
-    if (!tagesFenster.find((t) => t.datumStr === nd)) {
-      setFensterOffset((o) => o - 1);
-    }
-  };
+  const shiftWindowLeft = () => setFensterOffset((o) => o - 1);
 
-  const naechsterTag = () => {
-    if (istHeute) return;
-    const d = new Date(ausgewaehltesDate + "T12:00:00");
-    d.setDate(d.getDate() + 1);
-    const nd = toDateStr(d);
-    if (nd <= TODAY) {
-      setAusgewaehltesDate(nd);
-      if (!tagesFenster.find((t) => t.datumStr === nd)) {
-        setFensterOffset((o) => Math.min(o + 1, 0));
-      }
-    }
+  const shiftWindowRight = () => {
+    if (fensterOffset < 0) setFensterOffset((o) => o + 1);
   };
 
   const datumWaehlen = (ds: string) => {
@@ -911,6 +943,33 @@ export default function CoachDashboard() {
         86400000
     );
     setFensterOffset(Math.min(diff, 0));
+  };
+
+  const vorherigerTag = () => {
+    const d = new Date(ausgewaehltesDate + "T12:00:00");
+    d.setDate(d.getDate() - 1);
+    const nd = toDateStr(d);
+    setAusgewaehltesDate(nd);
+
+    if (!buildDayWindow(fensterOffset).find((t) => t.datumStr === nd)) {
+      setFensterOffset((o) => o - 1);
+    }
+  };
+
+  const naechsterTag = () => {
+    if (istHeute) return;
+
+    const d = new Date(ausgewaehltesDate + "T12:00:00");
+    d.setDate(d.getDate() + 1);
+    const nd = toDateStr(d);
+
+    if (nd <= TODAY) {
+      setAusgewaehltesDate(nd);
+
+      if (!buildDayWindow(fensterOffset).find((t) => t.datumStr === nd)) {
+        setFensterOffset((o) => Math.min(o + 1, 0));
+      }
+    }
   };
 
   const kannVorwaerts = zeitraum.key !== "frei" && zeitraum.offset > 0;
@@ -1249,73 +1308,100 @@ export default function CoachDashboard() {
             <div className="rounded-2xl border border-subtle bg-surface p-3">
               <div className="flex items-center gap-2">
                 <button
-                  onClick={vorherigerTag}
-                  className="flex h-7 w-7 items-center justify-center rounded-lg border border-subtle bg-surface-2 text-sm text-secondary transition-all hover:border-strong hover:text-primary"
+                  onClick={() => {
+                    shiftWindowLeft();
+                    vorherigerTag();
+                  }}
+                  className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg border border-subtle bg-surface-2 text-sm text-secondary transition-all hover:border-strong hover:text-primary"
                 >
                   ←
                 </button>
 
-                <div className="flex flex-1 gap-1">
-                  {tagesFenster.map(({ datumStr, tag, wochentag }) => {
-                    const isSel = datumStr === ausgewaehltesDate;
-                    const isT = datumStr === TODAY;
-                    const isFuture = datumStr > TODAY;
+                <div className="flex flex-1 flex-col gap-1">
+                  <p className="px-1 text-[10px] font-medium text-muted">
+                    {new Date(
+                      tagesFenster[0].datumStr + "T12:00:00"
+                    ).toLocaleDateString("de-DE", {
+                      month: "long",
+                      year: "numeric",
+                    })}
+                  </p>
 
-                    return (
-                      <button
-                        key={datumStr}
-                        onClick={() => !isFuture && datumWaehlen(datumStr)}
-                        disabled={isFuture}
-                        className={`flex flex-1 flex-col items-center gap-0.5 rounded-lg border py-1.5 transition-all ${
-                          isSel
-                            ? "border-[#FFD300]/40 bg-[#FFD300]/12"
-                            : isT
-                            ? "border-subtle bg-surface-2 hover:border-strong"
-                            : isFuture
-                            ? "cursor-not-allowed border-transparent opacity-20"
-                            : "border-transparent hover:border-subtle hover:bg-surface-2"
-                        }`}
-                      >
-                        <span
-                          className={`text-[9px] font-medium uppercase tracking-wide ${
+                  <div className="flex gap-1">
+                    {tagesFenster.map(({ datumStr, tag, wochentag }) => {
+                      const isSel = datumStr === ausgewaehltesDate;
+                      const isT = datumStr === TODAY;
+                      const isFuture = datumStr > TODAY;
+                      const d = new Date(datumStr + "T12:00:00");
+                      const showMonth = d.getDate() === 1;
+
+                      return (
+                        <button
+                          key={datumStr}
+                          onClick={() => !isFuture && datumWaehlen(datumStr)}
+                          disabled={isFuture}
+                          className={`flex flex-1 flex-col items-center gap-0.5 rounded-lg border py-1.5 transition-all ${
                             isSel
-                              ? "text-[#FFD300]"
+                              ? "border-[#FFD300]/40 bg-[#FFD300]/12"
                               : isT
-                              ? "text-secondary"
-                              : "text-muted"
+                              ? "border-subtle bg-surface-2 hover:border-strong"
+                              : isFuture
+                              ? "cursor-not-allowed border-transparent opacity-20"
+                              : "border-transparent hover:border-subtle hover:bg-surface-2"
                           }`}
                         >
-                          {wochentag}
-                        </span>
+                          <span
+                            className={`text-[9px] font-medium uppercase tracking-wide ${
+                              isSel
+                                ? "text-[#FFD300]"
+                                : isT
+                                ? "text-secondary"
+                                : "text-muted"
+                            }`}
+                          >
+                            {wochentag}
+                          </span>
 
-                        <span
-                          className={`text-xs font-semibold leading-none ${
-                            isSel
-                              ? "text-[#FFD300]"
-                              : isT
-                              ? "text-primary"
-                              : "text-secondary"
-                          }`}
-                        >
-                          {tag}
-                        </span>
+                          <span
+                            className={`text-xs font-semibold leading-none ${
+                              isSel
+                                ? "text-[#FFD300]"
+                                : isT
+                                ? "text-primary"
+                                : "text-secondary"
+                            }`}
+                          >
+                            {tag}
+                          </span>
 
-                        {isT && !isSel && (
-                          <span className="mt-0.5 h-1 w-1 rounded-full bg-[#FFD300]/50" />
-                        )}
+                          {showMonth && (
+                            <span className="text-[8px] text-muted leading-none mt-0.5">
+                              {d.toLocaleDateString("de-DE", {
+                                month: "short",
+                              })}
+                            </span>
+                          )}
 
-                        {isSel && (
-                          <span className="mt-0.5 h-1 w-1 rounded-full bg-[#FFD300]" />
-                        )}
-                      </button>
-                    );
-                  })}
+                          {isT && !isSel && !showMonth && (
+                            <span className="mt-0.5 h-1 w-1 rounded-full bg-[#FFD300]/50" />
+                          )}
+
+                          {isSel && !showMonth && (
+                            <span className="mt-0.5 h-1 w-1 rounded-full bg-[#FFD300]" />
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
 
                 <button
-                  onClick={naechsterTag}
-                  disabled={istHeute}
-                  className="flex h-7 w-7 items-center justify-center rounded-lg border border-subtle bg-surface-2 text-sm text-secondary transition-all hover:border-strong hover:text-primary disabled:cursor-not-allowed disabled:opacity-30"
+                  onClick={() => {
+                    shiftWindowRight();
+                    naechsterTag();
+                  }}
+                  disabled={fensterOffset >= 0 && istHeute}
+                  className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg border border-subtle bg-surface-2 text-sm text-secondary transition-all hover:border-strong hover:text-primary disabled:cursor-not-allowed disabled:opacity-30"
                 >
                   →
                 </button>
@@ -1354,9 +1440,12 @@ export default function CoachDashboard() {
                     {sortiertStats.map(({ card, entries }: any) => (
                       <SortierbarKarte
                         key={card._id}
+                        athleteId={ausgewaehltAthleteId!}
                         card={card}
                         entries={entries}
                         ausgewaehltesdatum={ausgewaehltesDate}
+                        von={von}
+                        bis={bis}
                       />
                     ))}
                   </div>

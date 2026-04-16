@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useMemo, useState } from "react";
 import {
   ResponsiveContainer,
   ComposedChart,
@@ -10,9 +10,19 @@ import {
   Tooltip,
   ReferenceLine,
 } from "recharts";
+import { Link } from "react-router-dom";
 import { useCardEntries } from "../../hooks/useStats";
 import { useTheme } from "../../hooks/useTheme";
-import { Link } from "react-router-dom";
+import {
+  buildChartPoints,
+  formatMetricNumber,
+  getChartGoalValue,
+  getMetricSummary,
+  movingAverage,
+  resolveGoalMode,
+  resolveMetricDefinition,
+  isGoalReached,
+} from "../../lib/metrics";
 
 interface Card {
   _id: string;
@@ -90,14 +100,6 @@ function toDateStr(d: Date): string {
   return d.toISOString().split("T")[0];
 }
 
-function movingAverage(data: number[], windowSize: number): number[] {
-  return data.map((_, i) => {
-    const start = Math.max(0, i - windowSize + 1);
-    const slice = data.slice(start, i + 1);
-    return +(slice.reduce((a, b) => a + b, 0) / slice.length).toFixed(2);
-  });
-}
-
 function getAnchorDate(selectedDate?: string) {
   if (selectedDate) {
     const parsed = new Date(`${selectedDate}T12:00:00`);
@@ -113,7 +115,10 @@ export default function MainChart({
 }: Props) {
   const { resolvedTheme } = useTheme();
 
-  const selectedCards = cards.filter((c) => selectedCardIds.includes(c._id));
+  const selectedCards = useMemo(
+    () => cards.filter((c) => selectedCardIds.includes(c._id)),
+    [cards, selectedCardIds]
+  );
 
   const [activeCardId, setActiveCardId] = useState<string>("");
   const [timeRange, setTimeRange] = useState<string>("1M");
@@ -126,13 +131,20 @@ export default function MainChart({
   const [customTo, setCustomTo] = useState<string>(() =>
     toDateStr(getAnchorDate(selectedDate))
   );
-
   const [trendActive, setTrendActive] = useState(false);
   const [trendWindow, setTrendWindow] = useState<number>(7);
 
   const displayCard =
     selectedCards.find((c) => c._id === activeCardId) ?? selectedCards[0];
+
   const cardColor = getCardColor(displayCard);
+  const displayUnit = getDisplayUnit(displayCard?.unit ?? "");
+  const chartType = displayCard?.chartType ?? "line";
+  const metricDefinition = useMemo(
+    () => resolveMetricDefinition(displayCard),
+    [displayCard]
+  );
+  const goalMode = useMemo(() => resolveGoalMode(displayCard), [displayCard]);
 
   const chartUi = useMemo(() => {
     if (resolvedTheme === "dark") {
@@ -167,11 +179,6 @@ export default function MainChart({
 
     const endDate = new Date(anchorDate);
 
-    if (timeRange === "1D") {
-      const day = toDateStr(endDate);
-      return { from: day, to: day };
-    }
-
     const range = TIME_RANGES.find((r) => r.key === timeRange);
     const startDate = new Date(endDate);
     startDate.setDate(startDate.getDate() - ((range?.days ?? 30) - 1));
@@ -184,7 +191,10 @@ export default function MainChart({
 
   const { data: entries, isLoading } = useCardEntries(
     displayCard?._id ?? null,
-    { from, to }
+    {
+      from,
+      to,
+    }
   );
 
   if (!selectedCards.length) {
@@ -197,114 +207,71 @@ export default function MainChart({
     );
   }
 
-  const isPaceCard = displayCard?.unit === "min/km";
-  const isSpeedCard = displayCard?.unit === "km/h";
-  const chartType = displayCard?.chartType ?? "line";
-  const displayUnit = getDisplayUnit(displayCard?.unit ?? "");
-
-  const storedGoalActive = Boolean(displayCard?.goalEnabled);
-  const storedGoalValue =
-    typeof displayCard?.goalValue === "number" ? displayCard.goalValue : null;
-  const storedGoalDirection =
-    displayCard?.goalDirection ??
-    (displayCard?.type === "weight" ? "lose" : "min");
-
-  const rawData = (entries ?? []).map((e: any) => {
-    let value = e.value;
-
-    if (isPaceCard && e.secondaryValue && e.value) {
-      value = +(e.secondaryValue / e.value).toFixed(2);
-    }
-
-    if (isSpeedCard && e.secondaryValue && e.value) {
-      value = +(e.value / (e.secondaryValue / 60)).toFixed(1);
-    }
-
-    const recordedAt = new Date(e.recordedAt);
-
-    return {
-      date:
-        timeRange === "1D"
-          ? recordedAt.toLocaleTimeString("de-DE", {
-              hour: "2-digit",
-              minute: "2-digit",
-            })
-          : recordedAt.toLocaleDateString("de-DE", {
-              day: "2-digit",
-              month: "short",
-            }),
-      dateISO: toDateStr(recordedAt),
-      value,
-      _real: value,
-      recordedAt: recordedAt.toISOString(),
-    };
+  const chartBasePoints = buildChartPoints({
+    card: displayCard,
+    entries: entries ?? [],
+    labelFormatter: (recordedAt) =>
+      recordedAt.toLocaleDateString("de-DE", {
+        day: "2-digit",
+        month: "short",
+      }),
   });
 
-  const maxVal = rawData.length
-    ? Math.max(...rawData.map((d) => d.value))
-    : 100;
-  const minVal = rawData.length ? Math.min(...rawData.map((d) => d.value)) : 0;
+  const rawValues = chartBasePoints.map((point) => point.rawValue);
 
-  const shouldInvert = isPaceCard;
-  const displayData = shouldInvert
-    ? rawData.map((d) => ({
-        ...d,
-        value: +(maxVal + minVal - d.value).toFixed(2),
-      }))
-    : rawData;
+  const summary = getMetricSummary({
+    card: displayCard,
+    values: rawValues,
+  });
 
-  const effectiveTrendActive = timeRange === "1D" ? false : trendActive;
+  const effectiveTrendActive = trendActive;
 
   const trendValues = effectiveTrendActive
     ? movingAverage(
-        displayData.map((d) => d.value),
-        Math.min(trendWindow, displayData.length)
+        chartBasePoints.map((point) => point.chartValue),
+        Math.min(trendWindow, Math.max(1, chartBasePoints.length)),
+        metricDefinition.decimals
       )
     : [];
 
-  const chartData = displayData.map((d, i) => ({
-    ...d,
-    trend: effectiveTrendActive ? trendValues[i] : undefined,
+  const chartData = chartBasePoints.map((point, index) => ({
+    date: point.date,
+    dateISO: point.dateISO,
+    value: point.chartValue,
+    _real: point.rawValue,
+    recordedAt: point.recordedAt,
+    trend: effectiveTrendActive ? trendValues[index] : undefined,
   }));
 
-  const selectedDateLabel =
-    timeRange === "1D"
-      ? null
-      : selectedDate
-      ? chartData.find((d) => d.dateISO === selectedDate)?.date
-      : null;
+  const selectedDateLabel = selectedDate
+    ? chartData.find((d) => d.dateISO === selectedDate)?.date ?? null
+    : null;
 
   const goalDisplayValue =
-    storedGoalActive && typeof storedGoalValue === "number"
-      ? shouldInvert
-        ? maxVal + minVal - storedGoalValue
-        : storedGoalValue
+    displayCard?.goalEnabled && typeof displayCard.goalValue === "number"
+      ? getChartGoalValue({
+          card: displayCard,
+          goalValue: displayCard.goalValue,
+          range: {
+            min: summary.min,
+            max: summary.max,
+          },
+        })
       : null;
 
-  const goalMet =
-    storedGoalActive && typeof storedGoalValue === "number"
-      ? rawData.filter((d) => {
-          if (storedGoalDirection === "gain" || storedGoalDirection === "min") {
-            return d.value >= storedGoalValue;
-          }
-          return d.value <= storedGoalValue;
-        }).length
-      : 0;
-
-  const goalPct =
-    storedGoalActive && rawData.length > 0
-      ? Math.round((goalMet / rawData.length) * 100)
-      : 0;
+  const goalStats =
+    displayCard?.goalEnabled && typeof displayCard.goalValue === "number"
+      ? summary.goal
+      : {
+          total: rawValues.filter((v) => typeof v === "number").length,
+          reached: 0,
+          remaining: 0,
+          percent: 0,
+        };
 
   const rangeLabel =
     timeRange === "custom"
       ? `${customFrom} – ${customTo}`
-      : timeRange === "1D"
-      ? anchorDate.toLocaleDateString("de-DE", {
-          day: "2-digit",
-          month: "2-digit",
-          year: "2-digit",
-        })
       : `${
           TIME_RANGES.find((r) => r.key === timeRange)?.label
         } bis ${anchorDate.toLocaleDateString("de-DE", {
@@ -313,11 +280,11 @@ export default function MainChart({
         })}`;
 
   const goalDirectionLabel =
-    storedGoalDirection === "lose"
+    displayCard?.goalDirection === "lose"
       ? "Abnehmen"
-      : storedGoalDirection === "gain"
+      : displayCard?.goalDirection === "gain"
       ? "Zunehmen"
-      : storedGoalDirection === "max"
+      : displayCard?.goalDirection === "max"
       ? "Obergrenze"
       : "Mindestziel";
 
@@ -403,6 +370,7 @@ export default function MainChart({
           </div>
         </div>
       </div>
+
       {timeRange === "custom" && (
         <div className="mb-3 flex flex-wrap items-center gap-2">
           <input
@@ -423,33 +391,37 @@ export default function MainChart({
 
       {!isLoading && chartData.length > 0 && (
         <div className="mb-3 flex flex-wrap items-center gap-3">
-          {storedGoalActive && typeof storedGoalValue === "number" && (
-            <div className="flex items-center gap-1.5 rounded-lg border border-[#FFD300]/40 bg-[#FFD300]/10 px-2.5 py-1 text-xs font-medium text-[#FFD300]">
-              <span className="inline-block w-4 border-t-2 border-dashed border-[#FFD300]" />
-              Ziel · {storedGoalValue} {displayUnit} · {goalDirectionLabel}
-            </div>
-          )}
+          {displayCard?.goalEnabled &&
+            typeof displayCard.goalValue === "number" && (
+              <div className="flex items-center gap-1.5 rounded-lg border border-[#FFD300]/40 bg-[#FFD300]/10 px-2.5 py-1 text-xs font-medium text-[#FFD300]">
+                <span className="inline-block w-4 border-t-2 border-dashed border-[#FFD300]" />
+                Ziel ·{" "}
+                {formatMetricNumber(
+                  displayCard.goalValue,
+                  metricDefinition.decimals
+                )}{" "}
+                {displayUnit} · {goalDirectionLabel}
+              </div>
+            )}
 
-          {timeRange !== "1D" && (
-            <button
-              onClick={() => setTrendActive((v) => !v)}
-              className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-medium transition-all ${
-                effectiveTrendActive
-                  ? "border-strong bg-surface-2 text-primary"
-                  : "border-subtle text-muted hover:border-strong hover:text-primary"
-              }`}
-            >
-              <span
-                className="inline-block h-0.5 w-4 rounded-full"
-                style={{
-                  backgroundColor: effectiveTrendActive
-                    ? chartUi.trend
-                    : chartUi.mutedLine,
-                }}
-              />
-              Trendlinie
-            </button>
-          )}
+          <button
+            onClick={() => setTrendActive((v) => !v)}
+            className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-medium transition-all ${
+              effectiveTrendActive
+                ? "border-strong bg-surface-2 text-primary"
+                : "border-subtle text-muted hover:border-strong hover:text-primary"
+            }`}
+          >
+            <span
+              className="inline-block h-0.5 w-4 rounded-full"
+              style={{
+                backgroundColor: effectiveTrendActive
+                  ? chartUi.trend
+                  : chartUi.mutedLine,
+              }}
+            />
+            Trendlinie
+          </button>
 
           {effectiveTrendActive && (
             <div className="flex items-center gap-1.5">
@@ -474,21 +446,25 @@ export default function MainChart({
         </div>
       )}
 
-      {storedGoalActive &&
-        typeof storedGoalValue === "number" &&
+      {displayCard?.goalEnabled &&
+        typeof displayCard.goalValue === "number" &&
         !isLoading &&
         chartData.length > 0 && (
           <div className="mb-4 rounded-xl border border-subtle bg-surface-2 px-3 py-2">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <span className="text-[10px] text-muted">Ziel-Status</span>
               <span className="text-xs font-medium text-[#FFD300]">
-                {storedGoalValue} {displayUnit}
+                {formatMetricNumber(
+                  displayCard.goalValue,
+                  metricDefinition.decimals
+                )}{" "}
+                {displayUnit}
               </span>
             </div>
 
             <p className="mt-1 text-[10px] text-muted">
-              {goalMet} von {rawData.length} Einträgen ({goalPct}%) erfüllen das
-              Ziel
+              {goalStats.reached} von {goalStats.total} Einträgen (
+              {goalStats.percent}%) erfüllen das Ziel
             </p>
           </div>
         )}
@@ -533,31 +509,6 @@ export default function MainChart({
             />
 
             <Tooltip
-              contentStyle={{
-                background: chartUi.tooltipBg,
-                border: `1px solid ${chartUi.tooltipBorder}`,
-                borderRadius: "12px",
-                color: chartUi.tooltipText,
-                fontSize: "13px",
-              }}
-              formatter={(v: any, name: any, props: any) => {
-                if (name === "trend") {
-                  return [`${v} ${displayUnit}`, "Trend"];
-                }
-
-                return [
-                  <span style={{ color: cardColor }}>
-                    {props.payload._real} {displayUnit}
-                  </span>,
-                  stripEmoji(displayCard?.label ?? ""),
-                ];
-              }}
-              itemSorter={(a, b) => {
-                // value immer oben
-                if (a.dataKey === "value") return -1;
-                if (b.dataKey === "value") return 1;
-                return 0;
-              }}
               content={({ payload, label }) => {
                 if (!payload || !payload.length) return null;
 
@@ -579,13 +530,22 @@ export default function MainChart({
 
                     {valueItem && (
                       <div style={{ color: cardColor, fontWeight: 500 }}>
-                        {valueItem.payload._real} {displayUnit}
+                        {formatMetricNumber(
+                          valueItem.payload._real,
+                          metricDefinition.decimals
+                        )}{" "}
+                        {displayUnit}
                       </div>
                     )}
 
-                    {trendItem && (
+                    {trendItem && typeof trendItem.value === "number" && (
                       <div style={{ opacity: 0.7, fontSize: 12 }}>
-                        Trend: {trendItem.value} {displayUnit}
+                        Trend:{" "}
+                        {formatMetricNumber(
+                          trendItem.value,
+                          metricDefinition.decimals
+                        )}{" "}
+                        {displayUnit}
                       </div>
                     )}
                   </div>
@@ -609,9 +569,9 @@ export default function MainChart({
               />
             )}
 
-            {storedGoalActive &&
-              typeof goalDisplayValue === "number" &&
-              typeof storedGoalValue === "number" && (
+            {displayCard?.goalEnabled &&
+              typeof displayCard.goalValue === "number" &&
+              typeof goalDisplayValue === "number" && (
                 <ReferenceLine
                   y={goalDisplayValue}
                   stroke="#FFD300"
@@ -619,7 +579,10 @@ export default function MainChart({
                   strokeDasharray="6 3"
                   strokeOpacity={0.9}
                   label={{
-                    value: `Ziel: ${storedGoalValue} ${displayUnit}`,
+                    value: `Ziel: ${formatMetricNumber(
+                      displayCard.goalValue,
+                      metricDefinition.decimals
+                    )} ${displayUnit}`,
                     position: "insideTopRight",
                     fill: "#FFD300",
                     fontSize: 10,
@@ -641,18 +604,19 @@ export default function MainChart({
               <Line
                 type="monotone"
                 dataKey="value"
-                name="hidden"
                 stroke={cardColor}
                 strokeWidth={2}
                 dot={
-                  storedGoalActive && typeof storedGoalValue === "number"
+                  displayCard?.goalEnabled &&
+                  typeof displayCard.goalValue === "number"
                     ? (props: any) => {
                         const { cx, cy, payload } = props;
-                        const met =
-                          storedGoalDirection === "gain" ||
-                          storedGoalDirection === "min"
-                            ? payload._real >= storedGoalValue
-                            : payload._real <= storedGoalValue;
+
+                        const met = isGoalReached({
+                          value: payload?._real,
+                          goalValue: displayCard.goalValue,
+                          goalMode,
+                        });
 
                         return (
                           <circle

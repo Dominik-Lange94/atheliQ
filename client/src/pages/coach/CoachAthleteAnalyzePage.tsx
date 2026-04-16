@@ -14,10 +14,22 @@ import {
   Pie,
   Cell,
 } from "recharts";
+import { FiArrowLeft, FiMaximize2, FiX } from "react-icons/fi";
 import { useCoachAthletes, useAthleteStats } from "../../hooks/useStats";
 import { useAuth } from "../../hooks/useAuth";
 import { useTheme } from "../../hooks/useTheme";
 import BrandLogo from "../../components/layout/BrandLogo";
+import {
+  resolveMetricDefinition,
+  normalizeMetricEntries,
+  shouldInvertYAxis,
+  resolveGoalMode,
+  isGoalReached,
+  getGoalStats,
+  formatMetricNumber,
+  getTrendForCard,
+  movingAverage as metricMovingAverage,
+} from "../../lib/metrics";
 
 type TimeRangeKey = "1W" | "1M" | "3M" | "1Y" | "custom";
 type ChartMode = "trend" | "goal";
@@ -28,7 +40,7 @@ type ChartRow = {
   value: number | null;
   _real: number | null;
   recordedAt: string | null;
-  trend: number;
+  trend: number | null;
 };
 
 const DEFAULT_COLORS: Record<string, string> = {
@@ -89,11 +101,6 @@ function getDisplayUnit(unit: string): string {
   return p1[0]?.trim() || "—";
 }
 
-function formatMetricNumber(value: number | null | undefined, decimals = 2) {
-  if (typeof value !== "number" || !Number.isFinite(value)) return null;
-  return Number(value.toFixed(decimals));
-}
-
 function formatCompactDate(date?: string | null) {
   if (!date) return "—";
 
@@ -116,48 +123,6 @@ function formatRangeLabel(
   return TIME_RANGES.find((r) => r.key === timeRange)?.label ?? "Zeitraum";
 }
 
-function calculateTrendLabel(first: number | null, last: number | null) {
-  if (typeof first !== "number" || typeof last !== "number") {
-    return {
-      label: "Zu wenig Daten",
-      delta: null as number | null,
-      direction: "flat" as "up" | "down" | "flat",
-    };
-  }
-
-  const delta = Number((last - first).toFixed(2));
-
-  if (delta > 0) {
-    return {
-      label: "Steigend",
-      delta,
-      direction: "up" as const,
-    };
-  }
-
-  if (delta < 0) {
-    return {
-      label: "Fallend",
-      delta,
-      direction: "down" as const,
-    };
-  }
-
-  return {
-    label: "Stabil",
-    delta: 0,
-    direction: "flat" as const,
-  };
-}
-
-function movingAverage(data: number[], windowSize: number): number[] {
-  return data.map((_, i) => {
-    const start = Math.max(0, i - windowSize + 1);
-    const slice = data.slice(start, i + 1);
-    return +(slice.reduce((a, b) => a + b, 0) / slice.length).toFixed(2);
-  });
-}
-
 function getRangeDates(
   timeRange: TimeRangeKey,
   customFrom: string,
@@ -178,75 +143,51 @@ function getRangeDates(
   };
 }
 
+function roundGoalDisplayValue(
+  maxVal: number,
+  minVal: number,
+  goalValue: number,
+  decimals = 2
+) {
+  return Number((maxVal + minVal - goalValue).toFixed(decimals));
+}
+
 function getInsight(
   card: any,
-  trend: any,
   goalActive: boolean,
   goalValue: number | null,
+  firstVal: number | null,
   lastVal: number | null
 ) {
   if (lastVal == null) return null;
 
+  const trend = getTrendForCard({
+    card,
+    first: firstVal,
+    last: lastVal,
+  });
+
+  const goalMode = resolveGoalMode(card);
+
   if (goalActive && goalValue != null) {
-    const reached =
-      card.goalDirection === "gain" || card.goalDirection === "min"
-        ? lastVal >= goalValue
-        : lastVal <= goalValue;
+    const reached = isGoalReached({
+      value: lastVal,
+      goalValue,
+      goalMode,
+    });
 
     if (reached) return { text: "Ziel erreicht", color: "emerald" };
   }
 
-  if (trend.direction === "up") {
+  if (trend.performance === "better") {
     return { text: "Verbesserung", color: "emerald" };
   }
 
-  if (trend.direction === "down") {
+  if (trend.performance === "worse") {
     return { text: "Verschlechterung", color: "rose" };
   }
 
   return { text: "Stabil", color: "gray" };
-}
-
-function ExpandIcon({ className = "h-4 w-4" }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d="M8 3H3v5" />
-      <path d="M16 3h5v5" />
-      <path d="M21 16v5h-5" />
-      <path d="M8 21H3v-5" />
-      <path d="M3 8l6-6" />
-      <path d="M21 8l-6-6" />
-      <path d="M3 16l6 6" />
-      <path d="M21 16l-6 6" />
-    </svg>
-  );
-}
-
-function CloseIcon({ className = "h-5 w-5" }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d="M18 6 6 18" />
-      <path d="m6 6 12 12" />
-    </svg>
-  );
 }
 
 function AnalyzeMetricCard({
@@ -267,13 +208,12 @@ function AnalyzeMetricCard({
   const displayUnit = getDisplayUnit(card.unit);
   const chartType = card.chartType ?? "line";
 
-  const isPaceCard = card.unit === "min/km";
-  const isSpeedCard = card.unit === "km/h";
+  const metricDefinition = useMemo(() => resolveMetricDefinition(card), [card]);
+  const invertYAxis = useMemo(() => shouldInvertYAxis(card), [card]);
+  const goalMode = useMemo(() => resolveGoalMode(card), [card]);
 
   const goalActive = Boolean(card.goalEnabled);
   const goalValue = typeof card.goalValue === "number" ? card.goalValue : null;
-  const goalDirection =
-    card.goalDirection ?? (card.type === "weight" ? "lose" : "min");
 
   const chartUi = useMemo(() => {
     if (resolvedTheme === "dark") {
@@ -322,28 +262,27 @@ function AnalyzeMetricCard({
     };
   }, [isFullscreen]);
 
-  const rawData = (entries ?? []).map((e: any) => {
-    let value = e.value;
+  const normalizedEntries = normalizeMetricEntries(card, entries ?? []);
 
-    if (isPaceCard && e.secondaryValue && e.value) {
-      value = +(e.secondaryValue / e.value).toFixed(2);
-    }
-
-    if (isSpeedCard && e.secondaryValue && e.value) {
-      value = +(e.value / (e.secondaryValue / 60)).toFixed(1);
-    }
-
-    const normalizedValue = formatMetricNumber(value, 2);
+  const rawData = normalizedEntries.map((entry, index) => {
+    const original = entries?.[index];
+    const recordedAt = original?.recordedAt
+      ? new Date(original.recordedAt)
+      : null;
+    const isValidDate =
+      recordedAt instanceof Date && !Number.isNaN(recordedAt.getTime());
 
     return {
-      date: new Date(e.recordedAt).toLocaleDateString("de-DE", {
-        day: "2-digit",
-        month: "short",
-      }),
-      dateISO: toDateStr(new Date(e.recordedAt)),
-      value: normalizedValue,
-      _real: normalizedValue,
-      recordedAt: e.recordedAt,
+      date: isValidDate
+        ? recordedAt.toLocaleDateString("de-DE", {
+            day: "2-digit",
+            month: "short",
+          })
+        : "—",
+      dateISO: isValidDate ? toDateStr(recordedAt) : "",
+      value: entry.rawValue,
+      _real: entry.rawValue,
+      recordedAt: isValidDate ? recordedAt.toISOString() : null,
     };
   });
 
@@ -358,7 +297,7 @@ function AnalyzeMetricCard({
         (
           numericValues.reduce((sum, value) => sum + value, 0) /
           numericValues.length
-        ).toFixed(2)
+        ).toFixed(metricDefinition.decimals)
       )
     : null;
   const firstVal = numericValues.length ? numericValues[0] : null;
@@ -366,8 +305,13 @@ function AnalyzeMetricCard({
     ? numericValues[numericValues.length - 1]
     : null;
 
-  const trend = calculateTrendLabel(firstVal, lastVal);
-  const insight = getInsight(card, trend, goalActive, goalValue, lastVal);
+  const trend = getTrendForCard({
+    card,
+    first: firstVal,
+    last: lastVal,
+  });
+
+  const insight = getInsight(card, goalActive, goalValue, firstVal, lastVal);
 
   const insightColorClass =
     insight?.color === "emerald"
@@ -376,42 +320,66 @@ function AnalyzeMetricCard({
       ? "text-rose-500"
       : "text-muted";
 
-  const trendValues = movingAverage(
-    rawData.map((d) => d.value ?? 0),
-    Math.min(7, Math.max(1, rawData.length))
-  );
+  const normalChartData =
+    invertYAxis && typeof maxVal === "number" && typeof minVal === "number"
+      ? rawData.map((d) => ({
+          ...d,
+          value:
+            typeof d.value === "number"
+              ? Number(
+                  (maxVal + minVal - d.value).toFixed(metricDefinition.decimals)
+                )
+              : null,
+        }))
+      : rawData;
 
-  const chartData: ChartRow[] = rawData.map((d, i) => ({
+  const fullscreenChartData = rawData.map((d) => ({
     ...d,
-    trend: trendValues[i],
+    value: d._real,
   }));
 
-  const goalMet =
-    goalActive && typeof goalValue === "number"
-      ? rawData.filter((d) => {
-          if (typeof d._real !== "number") return false;
-          if (goalDirection === "gain" || goalDirection === "min") {
-            return d._real >= goalValue;
-          }
-          return d._real <= goalValue;
-        }).length
-      : 0;
+  const trendValuesNormal = metricMovingAverage(
+    normalChartData.map((d) => d.value),
+    Math.min(7, Math.max(1, normalChartData.length)),
+    metricDefinition.decimals
+  );
 
-  const goalPct =
-    goalActive && rawData.length > 0
-      ? Math.round((goalMet / rawData.length) * 100)
-      : 0;
+  const trendValuesFullscreen = metricMovingAverage(
+    fullscreenChartData.map((d) => d.value),
+    Math.min(7, Math.max(1, fullscreenChartData.length)),
+    metricDefinition.decimals
+  );
+
+  const chartData: ChartRow[] = normalChartData.map((d, i) => ({
+    ...d,
+    trend: trendValuesNormal[i] ?? null,
+  }));
+
+  const fullscreenData: ChartRow[] = fullscreenChartData.map((d, i) => ({
+    ...d,
+    trend: trendValuesFullscreen[i] ?? null,
+  }));
+
+  const goalStats =
+    goalActive && typeof goalValue === "number"
+      ? getGoalStats({
+          card,
+          values: rawData.map((d) => d._real),
+          goalValue,
+        })
+      : {
+          total: rawData.length,
+          reached: 0,
+          remaining: rawData.length,
+          percent: 0,
+        };
+
+  const goalMet = goalStats.reached;
+  const goalPct = goalStats.percent;
+  const goalRemaining = goalStats.remaining;
 
   const goalDirectionLabel =
-    goalDirection === "lose"
-      ? "Abnehmen"
-      : goalDirection === "gain"
-      ? "Zunehmen"
-      : goalDirection === "max"
-      ? "Obergrenze"
-      : "Mindestziel";
-
-  const goalRemaining = Math.max(0, rawData.length - goalMet);
+    goalMode === "at_most" ? "Obergrenze" : "Mindestziel";
 
   const goalChartData =
     goalActive && typeof goalValue === "number"
@@ -427,6 +395,228 @@ function AnalyzeMetricCard({
     typeof goalValue === "number" &&
     rawData.length > 0;
 
+  const goalDisplayValueNormal =
+    goalActive &&
+    typeof goalValue === "number" &&
+    typeof maxVal === "number" &&
+    typeof minVal === "number"
+      ? invertYAxis
+        ? roundGoalDisplayValue(
+            maxVal,
+            minVal,
+            goalValue,
+            metricDefinition.decimals
+          )
+        : goalValue
+      : goalActive && typeof goalValue === "number"
+      ? goalValue
+      : null;
+
+  const goalDisplayValueFullscreen =
+    goalActive && typeof goalValue === "number" ? goalValue : null;
+
+  const renderTrendChart = ({
+    data,
+    heightClass,
+    fullscreen = false,
+  }: {
+    data: ChartRow[];
+    heightClass: string;
+    fullscreen?: boolean;
+  }) => {
+    const yDomain = fullscreen ? [0, "auto"] : ["auto", "auto"];
+    const goalLineValue = fullscreen
+      ? goalDisplayValueFullscreen
+      : goalDisplayValueNormal;
+
+    return (
+      <div className={heightClass}>
+        <ResponsiveContainer width="100%" height="100%">
+          <ComposedChart
+            data={data}
+            margin={{
+              top: 8,
+              right: 8,
+              bottom: 0,
+              left: fullscreen ? 0 : -18,
+            }}
+          >
+            <CartesianGrid strokeDasharray="3 3" stroke={chartUi.grid} />
+
+            <XAxis
+              dataKey="date"
+              tick={{ fill: chartUi.tick, fontSize: fullscreen ? 12 : 11 }}
+              axisLine={false}
+              tickLine={false}
+              interval="preserveStartEnd"
+            />
+
+            <YAxis
+              tick={{ fill: chartUi.tick, fontSize: fullscreen ? 12 : 11 }}
+              axisLine={false}
+              tickLine={false}
+              domain={yDomain as any}
+            />
+
+            <Tooltip
+              content={({ payload, label }) => {
+                if (!payload || !payload.length) return null;
+
+                const valueItem = payload.find((p) => p.dataKey === "value");
+                const trendItem = payload.find((p) => p.dataKey === "trend");
+
+                const value = valueItem?.payload?._real;
+                const trendValue = trendItem?.value;
+
+                let missing: number | null = null;
+                if (
+                  goalActive &&
+                  typeof goalValue === "number" &&
+                  typeof value === "number"
+                ) {
+                  missing =
+                    goalMode === "at_least"
+                      ? Math.max(0, goalValue - value)
+                      : Math.max(0, value - goalValue);
+                }
+
+                return (
+                  <div
+                    style={{
+                      background: chartUi.tooltipBg,
+                      border: `1px solid ${chartUi.tooltipBorder}`,
+                      borderRadius: "12px",
+                      padding: "10px 12px",
+                      fontSize: "13px",
+                      color: chartUi.tooltipText,
+                    }}
+                  >
+                    <div style={{ marginBottom: 4, opacity: 0.7 }}>{label}</div>
+
+                    <div style={{ color: cardColor, fontWeight: 600 }}>
+                      {formatMetricNumber(value, metricDefinition.decimals)}{" "}
+                      {displayUnit}
+                    </div>
+
+                    {goalActive &&
+                      typeof goalValue === "number" &&
+                      missing !== null && (
+                        <div style={{ fontSize: 12, opacity: 0.8 }}>
+                          Noch{" "}
+                          {formatMetricNumber(
+                            missing,
+                            metricDefinition.decimals
+                          )}{" "}
+                          {displayUnit} bis Ziel
+                        </div>
+                      )}
+
+                    {typeof trendValue === "number" && (
+                      <div style={{ fontSize: 12, opacity: 0.6 }}>
+                        Trend:{" "}
+                        {formatMetricNumber(
+                          trendValue,
+                          metricDefinition.decimals
+                        )}{" "}
+                        {displayUnit}
+                      </div>
+                    )}
+                  </div>
+                );
+              }}
+            />
+
+            {data.length > 0 && (
+              <ReferenceLine
+                x={data[data.length - 1]?.date}
+                stroke={cardColor}
+                strokeWidth={1.5}
+                strokeOpacity={0.65}
+                strokeDasharray="4 3"
+              />
+            )}
+
+            {goalActive &&
+              typeof goalValue === "number" &&
+              typeof goalLineValue === "number" && (
+                <ReferenceLine
+                  y={goalLineValue}
+                  stroke="#FFD300"
+                  strokeWidth={1.5}
+                  strokeDasharray="6 3"
+                  strokeOpacity={0.95}
+                  ifOverflow="extendDomain"
+                  label={{
+                    value: `Ziel: ${formatMetricNumber(
+                      goalValue,
+                      metricDefinition.decimals
+                    )} ${displayUnit}`,
+                    position: "insideTopRight",
+                    fill: "#FFD300",
+                    fontSize: fullscreen ? 11 : 10,
+                  }}
+                />
+              )}
+
+            {(chartType === "bar" || chartType === "mixed") && (
+              <Bar
+                dataKey="value"
+                fill={cardColor}
+                fillOpacity={chartType === "mixed" ? 0.28 : 0.72}
+                radius={[4, 4, 0, 0]}
+                maxBarSize={28}
+              />
+            )}
+
+            {(chartType === "line" || chartType === "mixed") && (
+              <Line
+                type="monotone"
+                dataKey="value"
+                stroke={cardColor}
+                strokeWidth={fullscreen ? 2.4 : 2}
+                dot={
+                  goalActive && typeof goalValue === "number"
+                    ? (props: any) => {
+                        const { cx, cy, payload } = props;
+                        const realValue = payload?._real;
+
+                        const met = isGoalReached({
+                          value: realValue,
+                          goalValue,
+                          goalMode,
+                        });
+
+                        return (
+                          <circle
+                            key={`dot-${cx}-${cy}`}
+                            cx={cx}
+                            cy={cy}
+                            r={fullscreen ? 3.5 : 3}
+                            fill={met ? "#ffffff" : cardColor}
+                          />
+                        );
+                      }
+                    : false
+                }
+                activeDot={{ r: fullscreen ? 6 : 5, fill: cardColor }}
+              />
+            )}
+
+            <Line
+              type="monotone"
+              dataKey="trend"
+              stroke={chartUi.trend}
+              strokeWidth={fullscreen ? 1.8 : 1.5}
+              dot={false}
+              activeDot={false}
+              connectNulls
+            />
+          </ComposedChart>
+        </ResponsiveContainer>
+      </div>
+    );
+  };
+
   const renderMetricVisualization = (heightClass: string) => {
     if (chartData.length === 0) {
       return (
@@ -440,9 +630,9 @@ function AnalyzeMetricCard({
       );
     }
 
-    return (
-      <div className={heightClass}>
-        {showGoalChart ? (
+    if (showGoalChart) {
+      return (
+        <div className={heightClass}>
           <div className="grid h-full gap-4 md:grid-cols-[240px_minmax(0,1fr)]">
             <div className="flex h-full items-center justify-center rounded-2xl border border-subtle bg-surface-2 p-3">
               <ResponsiveContainer width="100%" height="100%">
@@ -522,7 +712,9 @@ function AnalyzeMetricCard({
                     {goalDirectionLabel}
                   </p>
                   <p className="mt-1 text-xs text-muted">
-                    Zielwert: {formatMetricNumber(goalValue, 2)} {displayUnit}
+                    Zielwert:{" "}
+                    {formatMetricNumber(goalValue, metricDefinition.decimals)}{" "}
+                    {displayUnit}
                   </p>
                 </div>
               </div>
@@ -533,7 +725,7 @@ function AnalyzeMetricCard({
                 </p>
                 <div className="mt-2 flex-1">
                   <p className="text-sm font-semibold text-primary">
-                    {goalMet} von {rawData.length}
+                    {goalMet} von {goalStats.total}
                   </p>
                   <p className="mt-1 text-xs text-muted">
                     Einträge im Zielbereich
@@ -550,7 +742,7 @@ function AnalyzeMetricCard({
                     {goalRemaining}
                   </p>
                   <p className="mt-1 text-xs text-muted">
-                    Einträge noch unter Ziel
+                    Einträge noch nicht im Ziel
                   </p>
                 </div>
               </div>
@@ -576,184 +768,29 @@ function AnalyzeMetricCard({
               </div>
             </div>
           </div>
-        ) : (
-          <ResponsiveContainer width="100%" height="100%">
-            <ComposedChart
-              data={chartData}
-              margin={{ top: 8, right: 8, bottom: 0, left: -18 }}
-            >
-              <CartesianGrid strokeDasharray="3 3" stroke={chartUi.grid} />
+        </div>
+      );
+    }
 
-              <XAxis
-                dataKey="date"
-                tick={{ fill: chartUi.tick, fontSize: 11 }}
-                axisLine={false}
-                tickLine={false}
-                interval="preserveStartEnd"
-              />
+    return renderTrendChart({ data: chartData, heightClass });
+  };
 
-              <YAxis
-                tick={{ fill: chartUi.tick, fontSize: 11 }}
-                axisLine={false}
-                tickLine={false}
-                domain={["auto", "auto"]}
-              />
+  const renderFullscreenVisualization = () => {
+    if (fullscreenData.length === 0) {
+      return (
+        <div className="flex h-full items-center justify-center rounded-2xl border border-subtle bg-surface">
+          <p className="text-sm text-muted">
+            Keine Daten im gewählten Zeitraum
+          </p>
+        </div>
+      );
+    }
 
-              <Tooltip
-                content={({ payload, label }) => {
-                  if (!payload || !payload.length) return null;
-
-                  const valueItem = payload.find((p) => p.dataKey === "value");
-                  const trendItem = payload.find((p) => p.dataKey === "trend");
-
-                  const value = valueItem?.payload?._real;
-                  const trendValue = trendItem?.value;
-
-                  let missing: number | null = null;
-                  if (
-                    goalActive &&
-                    typeof goalValue === "number" &&
-                    typeof value === "number"
-                  ) {
-                    if (goalDirection === "gain" || goalDirection === "min") {
-                      missing = Math.max(0, goalValue - value);
-                    } else {
-                      missing = Math.max(0, value - goalValue);
-                    }
-                  }
-
-                  return (
-                    <div
-                      style={{
-                        background: chartUi.tooltipBg,
-                        border: `1px solid ${chartUi.tooltipBorder}`,
-                        borderRadius: "12px",
-                        padding: "10px 12px",
-                        fontSize: "13px",
-                        color: chartUi.tooltipText,
-                      }}
-                    >
-                      <div style={{ marginBottom: 4, opacity: 0.7 }}>
-                        {label}
-                      </div>
-
-                      <div style={{ color: cardColor, fontWeight: 600 }}>
-                        {formatMetricNumber(value, 2)} {displayUnit}
-                      </div>
-
-                      {goalActive &&
-                        typeof goalValue === "number" &&
-                        missing !== null && (
-                          <div style={{ fontSize: 12, opacity: 0.8 }}>
-                            Noch {formatMetricNumber(missing, 2)} {displayUnit}{" "}
-                            bis Ziel
-                          </div>
-                        )}
-
-                      {trendValue !== undefined && (
-                        <div style={{ fontSize: 12, opacity: 0.6 }}>
-                          Trend:{" "}
-                          {formatMetricNumber(
-                            typeof trendValue === "number" ? trendValue : null,
-                            2
-                          )}{" "}
-                          {displayUnit}
-                        </div>
-                      )}
-                    </div>
-                  );
-                }}
-              />
-
-              {chartData.length > 0 && (
-                <ReferenceLine
-                  x={chartData[chartData.length - 1]?.date}
-                  stroke={cardColor}
-                  strokeWidth={1.5}
-                  strokeOpacity={0.65}
-                  strokeDasharray="4 3"
-                />
-              )}
-
-              {goalActive && typeof goalValue === "number" && (
-                <ReferenceLine
-                  y={goalValue}
-                  stroke="#FFD300"
-                  strokeWidth={1.5}
-                  strokeDasharray="6 3"
-                  strokeOpacity={0.9}
-                  label={{
-                    value: `Ziel: ${formatMetricNumber(
-                      goalValue,
-                      2
-                    )} ${displayUnit}`,
-                    position: "insideTopRight",
-                    fill: "#FFD300",
-                    fontSize: 10,
-                  }}
-                />
-              )}
-
-              {(chartType === "bar" || chartType === "mixed") && (
-                <Bar
-                  dataKey="value"
-                  fill={cardColor}
-                  fillOpacity={chartType === "mixed" ? 0.28 : 0.72}
-                  radius={[4, 4, 0, 0]}
-                  maxBarSize={28}
-                />
-              )}
-
-              {(chartType === "line" || chartType === "mixed") && (
-                <Line
-                  type="monotone"
-                  dataKey="value"
-                  stroke={cardColor}
-                  strokeWidth={2}
-                  dot={
-                    goalActive && typeof goalValue === "number"
-                      ? (props: any) => {
-                          const { cx, cy, payload } = props;
-                          const realValue = payload?._real;
-
-                          const met =
-                            typeof realValue === "number"
-                              ? goalDirection === "gain" ||
-                                goalDirection === "min"
-                                ? realValue >= goalValue
-                                : realValue <= goalValue
-                              : false;
-
-                          return (
-                            <circle
-                              key={`dot-${cx}-${cy}`}
-                              cx={cx}
-                              cy={cy}
-                              r={3}
-                              fill={met ? "#ffffff" : cardColor}
-                            />
-                          );
-                        }
-                      : false
-                  }
-                  activeDot={{ r: 5, fill: cardColor }}
-                />
-              )}
-
-              <Line
-                type="monotone"
-                dataKey="trend"
-                stroke={chartUi.trend}
-                strokeWidth={1.5}
-                dot={false}
-                activeDot={false}
-                connectNulls
-              />
-            </ComposedChart>
-          </ResponsiveContainer>
-        )}
-      </div>
-    );
+    return renderTrendChart({
+      data: fullscreenData,
+      heightClass: "h-full",
+      fullscreen: true,
+    });
   };
 
   return (
@@ -789,7 +826,7 @@ function AnalyzeMetricCard({
                       card.label
                     )} im Vollbild öffnen`}
                   >
-                    <ExpandIcon className="h-3.5 w-3.5" />
+                    <FiMaximize2 className="h-3.5 w-3.5" />
                   </button>
                 </div>
               </div>
@@ -805,7 +842,10 @@ function AnalyzeMetricCard({
               </p>
               <p className="text-sm font-semibold text-primary">
                 {typeof latestValue === "number"
-                  ? `${formatMetricNumber(latestValue, 2)} ${displayUnit}`
+                  ? `${formatMetricNumber(
+                      latestValue,
+                      metricDefinition.decimals
+                    )} ${displayUnit}`
                   : "—"}
               </p>
             </div>
@@ -820,9 +860,9 @@ function AnalyzeMetricCard({
             <div className="mt-2 flex-1">
               <p
                 className={`text-sm font-semibold ${
-                  trend.direction === "up"
+                  trend.performance === "better"
                     ? "text-emerald-500"
-                    : trend.direction === "down"
+                    : trend.performance === "worse"
                     ? "text-rose-500"
                     : "text-primary"
                 }`}
@@ -834,7 +874,7 @@ function AnalyzeMetricCard({
                   ? "—"
                   : `${trend.delta > 0 ? "+" : ""}${formatMetricNumber(
                       trend.delta,
-                      2
+                      metricDefinition.decimals
                     )} ${displayUnit}`}
               </p>
             </div>
@@ -858,7 +898,7 @@ function AnalyzeMetricCard({
             </p>
             <div className="mt-2 flex-1">
               <p className="text-sm font-semibold text-primary">
-                {formatMetricNumber(avgVal, 2) ?? "—"}
+                {formatMetricNumber(avgVal, metricDefinition.decimals) ?? "—"}
               </p>
               <p className="mt-1 text-xs text-muted">{displayUnit}</p>
             </div>
@@ -893,14 +933,19 @@ function AnalyzeMetricCard({
                     {goalPct}% erreicht
                   </p>
                   <p className="mt-1 text-[10px] font-medium text-[#c99700] dark:text-[#FFD300]">
-                    Ziel: {formatMetricNumber(goalValue, 2)} {displayUnit}
+                    Ziel:{" "}
+                    {formatMetricNumber(goalValue, metricDefinition.decimals)}{" "}
+                    {displayUnit}
                   </p>
                 </>
               ) : (
                 <>
                   <p className="text-sm font-semibold text-primary">
-                    {formatMetricNumber(minVal, 2) ?? "—"} /{" "}
-                    {formatMetricNumber(maxVal, 2) ?? "—"}
+                    {formatMetricNumber(minVal, metricDefinition.decimals) ??
+                      "—"}{" "}
+                    /{" "}
+                    {formatMetricNumber(maxVal, metricDefinition.decimals) ??
+                      "—"}
                   </p>
                   <p className="mt-1 text-xs text-muted">
                     Letzter Eintrag:{" "}
@@ -957,33 +1002,15 @@ function AnalyzeMetricCard({
                   </p>
                 </div>
 
-                <div className="flex items-center gap-2">
-                  {goalActive &&
-                    typeof goalValue === "number" &&
-                    rawData.length > 0 && (
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setChartMode((prev) =>
-                            prev === "trend" ? "goal" : "trend"
-                          )
-                        }
-                        className="rounded-xl border border-subtle bg-surface px-3 py-2 text-xs font-medium text-secondary transition-all hover:border-strong hover:text-primary"
-                      >
-                        {chartMode === "trend" ? "Zielansicht" : "Verlauf"}
-                      </button>
-                    )}
-
-                  <button
-                    type="button"
-                    onClick={() => setIsFullscreen(false)}
-                    className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-subtle bg-surface text-secondary transition-all hover:border-strong hover:text-primary"
-                    title="Schließen"
-                    aria-label="Vollansicht schließen"
-                  >
-                    <CloseIcon />
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsFullscreen(false)}
+                  className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-subtle bg-surface text-secondary transition-all hover:border-strong hover:text-primary"
+                  title="Schließen"
+                  aria-label="Vollansicht schließen"
+                >
+                  <FiX className="h-5 w-5" />
+                </button>
               </div>
             </div>
 
@@ -994,9 +1021,9 @@ function AnalyzeMetricCard({
                 </p>
                 <p
                   className={`mt-2 text-base font-semibold ${
-                    trend.direction === "up"
+                    trend.performance === "better"
                       ? "text-emerald-500"
-                      : trend.direction === "down"
+                      : trend.performance === "worse"
                       ? "text-rose-500"
                       : "text-primary"
                   }`}
@@ -1008,7 +1035,7 @@ function AnalyzeMetricCard({
                     ? "—"
                     : `${trend.delta > 0 ? "+" : ""}${formatMetricNumber(
                         trend.delta,
-                        2
+                        metricDefinition.decimals
                       )} ${displayUnit}`}
                 </p>
               </div>
@@ -1028,7 +1055,7 @@ function AnalyzeMetricCard({
                   Durchschnitt
                 </p>
                 <p className="mt-2 text-base font-semibold text-primary">
-                  {formatMetricNumber(avgVal, 2) ?? "—"}
+                  {formatMetricNumber(avgVal, metricDefinition.decimals) ?? "—"}
                 </p>
                 <p className="mt-1 text-sm text-muted">{displayUnit}</p>
               </div>
@@ -1039,19 +1066,24 @@ function AnalyzeMetricCard({
                 </p>
                 <p className="mt-2 text-base font-semibold text-primary">
                   {typeof latestValue === "number"
-                    ? `${formatMetricNumber(latestValue, 2)} ${displayUnit}`
+                    ? `${formatMetricNumber(
+                        latestValue,
+                        metricDefinition.decimals
+                      )} ${displayUnit}`
                     : "—"}
                 </p>
                 {goalActive && typeof goalValue === "number" && (
                   <p className="mt-1 text-sm text-[#c99700] dark:text-[#FFD300]">
-                    Ziel: {formatMetricNumber(goalValue, 2)} {displayUnit}
+                    Ziel:{" "}
+                    {formatMetricNumber(goalValue, metricDefinition.decimals)}{" "}
+                    {displayUnit}
                   </p>
                 )}
               </div>
             </div>
 
             <div className="min-h-0 flex-1 px-5 py-5 sm:px-6">
-              {renderMetricVisualization("h-full")}
+              {renderFullscreenVisualization()}
             </div>
           </div>
         </div>
@@ -1105,13 +1137,14 @@ export default function CoachAthleteAnalyzePage() {
     const q = search.trim().toLowerCase();
 
     return visibleStats.filter((item: any) => {
-      const card = item.card;
-      const matchesType = typeFilter === "all" || card.type === typeFilter;
+      const currentCard = item.card;
+      const matchesType =
+        typeFilter === "all" || currentCard.type === typeFilter;
       const matchesSearch =
         !q ||
-        stripEmoji(card.label).toLowerCase().includes(q) ||
-        card.type.toLowerCase().includes(q) ||
-        card.unit.toLowerCase().includes(q);
+        stripEmoji(currentCard.label).toLowerCase().includes(q) ||
+        currentCard.type.toLowerCase().includes(q) ||
+        currentCard.unit.toLowerCase().includes(q);
 
       return matchesType && matchesSearch;
     });
@@ -1146,19 +1179,7 @@ export default function CoachAthleteAnalyzePage() {
               className="flex h-10 w-10 items-center justify-center rounded-xl border border-subtle bg-surface text-secondary transition-all hover:border-strong hover:bg-surface-2 hover:text-primary"
               title="Zurück"
             >
-              <svg
-                className="h-5 w-5"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={1.7}
-                  d="M15 19l-7-7 7-7"
-                />
-              </svg>
+              <FiArrowLeft className="h-5 w-5" />
             </button>
 
             <BrandLogo showText={false} imageClassName="h-8 w-auto" />
@@ -1211,7 +1232,7 @@ export default function CoachAthleteAnalyzePage() {
             </p>
             <p className="mt-1 text-2xl font-semibold text-primary">
               {typeof kpis.latestWeight === "number"
-                ? `${formatMetricNumber(kpis.latestWeight, 2)} kg`
+                ? `${formatMetricNumber(kpis.latestWeight, 1)} kg`
                 : "—"}
             </p>
           </div>
