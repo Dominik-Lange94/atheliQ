@@ -20,15 +20,16 @@ import { useAuth } from "../../hooks/useAuth";
 import { useTheme } from "../../hooks/useTheme";
 import BrandLogo from "../../components/layout/BrandLogo";
 import {
-  resolveMetricDefinition,
-  normalizeMetricEntries,
-  shouldInvertYAxis,
-  resolveGoalMode,
-  isGoalReached,
-  getGoalStats,
+  buildChartPoints,
   formatMetricNumber,
-  getTrendForCard,
-  movingAverage as metricMovingAverage,
+  getChartGoalValue,
+  getMetricInsight,
+  getMetricSummary,
+  getValueRange,
+  isGoalReached,
+  movingAverage,
+  resolveGoalMode,
+  resolveMetricDefinition,
 } from "../../lib/metrics";
 
 type TimeRangeKey = "1W" | "1M" | "3M" | "1Y" | "custom";
@@ -78,7 +79,7 @@ function toDateStr(d: Date): string {
 }
 
 function stripEmoji(label: string): string {
-  return label.replace(/^\[[a-z]+\]\s*/, "").replace(/^\p{Emoji}\s*/u, "");
+  return label.replace(/^\[[a-z]+\]\s*/u, "").replace(/^\p{Emoji}\s*/u, "");
 }
 
 function getCardColor(card?: any): string {
@@ -143,53 +144,6 @@ function getRangeDates(
   };
 }
 
-function roundGoalDisplayValue(
-  maxVal: number,
-  minVal: number,
-  goalValue: number,
-  decimals = 2
-) {
-  return Number((maxVal + minVal - goalValue).toFixed(decimals));
-}
-
-function getInsight(
-  card: any,
-  goalActive: boolean,
-  goalValue: number | null,
-  firstVal: number | null,
-  lastVal: number | null
-) {
-  if (lastVal == null) return null;
-
-  const trend = getTrendForCard({
-    card,
-    first: firstVal,
-    last: lastVal,
-  });
-
-  const goalMode = resolveGoalMode(card);
-
-  if (goalActive && goalValue != null) {
-    const reached = isGoalReached({
-      value: lastVal,
-      goalValue,
-      goalMode,
-    });
-
-    if (reached) return { text: "Ziel erreicht", color: "emerald" };
-  }
-
-  if (trend.performance === "better") {
-    return { text: "Verbesserung", color: "emerald" };
-  }
-
-  if (trend.performance === "worse") {
-    return { text: "Verschlechterung", color: "rose" };
-  }
-
-  return { text: "Stabil", color: "gray" };
-}
-
 function AnalyzeMetricCard({
   card,
   entries,
@@ -209,7 +163,6 @@ function AnalyzeMetricCard({
   const chartType = card.chartType ?? "line";
 
   const metricDefinition = useMemo(() => resolveMetricDefinition(card), [card]);
-  const invertYAxis = useMemo(() => shouldInvertYAxis(card), [card]);
   const goalMode = useMemo(() => resolveGoalMode(card), [card]);
 
   const goalActive = Boolean(card.goalEnabled);
@@ -262,56 +215,46 @@ function AnalyzeMetricCard({
     };
   }, [isFullscreen]);
 
-  const normalizedEntries = normalizeMetricEntries(card, entries ?? []);
-
-  const rawData = normalizedEntries.map((entry, index) => {
-    const original = entries?.[index];
-    const recordedAt = original?.recordedAt
-      ? new Date(original.recordedAt)
-      : null;
-    const isValidDate =
-      recordedAt instanceof Date && !Number.isNaN(recordedAt.getTime());
-
-    return {
-      date: isValidDate
-        ? recordedAt.toLocaleDateString("de-DE", {
+  const chartBasePoints = useMemo(
+    () =>
+      buildChartPoints({
+        card,
+        entries: entries ?? [],
+        labelFormatter: (recordedAt) =>
+          recordedAt.toLocaleDateString("de-DE", {
             day: "2-digit",
             month: "short",
-          })
-        : "—",
-      dateISO: isValidDate ? toDateStr(recordedAt) : "",
-      value: entry.rawValue,
-      _real: entry.rawValue,
-      recordedAt: isValidDate ? recordedAt.toISOString() : null,
-    };
-  });
+          }),
+        applyChartTransform: true,
+      }),
+    [card, entries]
+  );
 
-  const numericValues = rawData
-    .map((d) => d.value)
-    .filter((v): v is number => typeof v === "number" && Number.isFinite(v));
+  const rawValues = useMemo(
+    () => chartBasePoints.map((point) => point.rawValue),
+    [chartBasePoints]
+  );
 
-  const maxVal = numericValues.length ? Math.max(...numericValues) : null;
-  const minVal = numericValues.length ? Math.min(...numericValues) : null;
-  const avgVal = numericValues.length
-    ? Number(
-        (
-          numericValues.reduce((sum, value) => sum + value, 0) /
-          numericValues.length
-        ).toFixed(metricDefinition.decimals)
-      )
-    : null;
-  const firstVal = numericValues.length ? numericValues[0] : null;
-  const lastVal = numericValues.length
-    ? numericValues[numericValues.length - 1]
-    : null;
+  const valueRange = useMemo(() => getValueRange(rawValues), [rawValues]);
 
-  const trend = getTrendForCard({
-    card,
-    first: firstVal,
-    last: lastVal,
-  });
+  const summary = useMemo(
+    () =>
+      getMetricSummary({
+        card,
+        values: rawValues,
+      }),
+    [card, rawValues]
+  );
 
-  const insight = getInsight(card, goalActive, goalValue, firstVal, lastVal);
+  const insight = useMemo(
+    () =>
+      getMetricInsight({
+        card,
+        first: summary.first,
+        last: summary.last,
+      }),
+    [card, summary.first, summary.last]
+  );
 
   const insightColorClass =
     insight?.color === "emerald"
@@ -320,57 +263,79 @@ function AnalyzeMetricCard({
       ? "text-rose-500"
       : "text-muted";
 
-  const normalChartData =
-    invertYAxis && typeof maxVal === "number" && typeof minVal === "number"
-      ? rawData.map((d) => ({
-          ...d,
-          value:
-            typeof d.value === "number"
-              ? Number(
-                  (maxVal + minVal - d.value).toFixed(metricDefinition.decimals)
-                )
-              : null,
-        }))
-      : rawData;
-
-  const fullscreenChartData = rawData.map((d) => ({
-    ...d,
-    value: d._real,
-  }));
-
-  const trendValuesNormal = metricMovingAverage(
-    normalChartData.map((d) => d.value),
-    Math.min(7, Math.max(1, normalChartData.length)),
-    metricDefinition.decimals
+  const rawData = useMemo(
+    () =>
+      chartBasePoints.map((point) => ({
+        date: point.date,
+        dateISO: point.dateISO,
+        value: point.chartValue,
+        _real: point.rawValue,
+        recordedAt: point.recordedAt,
+      })),
+    [chartBasePoints]
   );
 
-  const trendValuesFullscreen = metricMovingAverage(
-    fullscreenChartData.map((d) => d.value),
-    Math.min(7, Math.max(1, fullscreenChartData.length)),
-    metricDefinition.decimals
+  const fullscreenRawData = useMemo(
+    () =>
+      chartBasePoints.map((point) => ({
+        date: point.date,
+        dateISO: point.dateISO,
+        value: point.rawValue,
+        _real: point.rawValue,
+        recordedAt: point.recordedAt,
+      })),
+    [chartBasePoints]
   );
 
-  const chartData: ChartRow[] = normalChartData.map((d, i) => ({
-    ...d,
-    trend: trendValuesNormal[i] ?? null,
-  }));
+  const trendValuesNormal = useMemo(
+    () =>
+      movingAverage(
+        rawData.map((d) => d.value),
+        Math.min(7, Math.max(1, rawData.length)),
+        metricDefinition.decimals
+      ),
+    [rawData, metricDefinition.decimals]
+  );
 
-  const fullscreenData: ChartRow[] = fullscreenChartData.map((d, i) => ({
-    ...d,
-    trend: trendValuesFullscreen[i] ?? null,
-  }));
+  const trendValuesFullscreen = useMemo(
+    () =>
+      movingAverage(
+        fullscreenRawData.map((d) => d.value),
+        Math.min(7, Math.max(1, fullscreenRawData.length)),
+        metricDefinition.decimals
+      ),
+    [fullscreenRawData, metricDefinition.decimals]
+  );
+
+  const chartData: ChartRow[] = useMemo(
+    () =>
+      rawData.map((d, i) => ({
+        ...d,
+        trend: trendValuesNormal[i] ?? null,
+      })),
+    [rawData, trendValuesNormal]
+  );
+
+  const fullscreenData: ChartRow[] = useMemo(
+    () =>
+      fullscreenRawData.map((d, i) => ({
+        ...d,
+        trend: trendValuesFullscreen[i] ?? null,
+      })),
+    [fullscreenRawData, trendValuesFullscreen]
+  );
+
+  const validValuesCount = rawValues.filter(
+    (v): v is number => typeof v === "number" && Number.isFinite(v)
+  ).length;
 
   const goalStats =
     goalActive && typeof goalValue === "number"
-      ? getGoalStats({
-          card,
-          values: rawData.map((d) => d._real),
-          goalValue,
-        })
+      ? summary.goal
       : {
-          total: rawData.length,
+          total: validValuesCount,
           reached: 0,
-          remaining: rawData.length,
+          remaining: validValuesCount,
           percent: 0,
         };
 
@@ -393,27 +358,26 @@ function AnalyzeMetricCard({
     chartMode === "goal" &&
     goalActive &&
     typeof goalValue === "number" &&
-    rawData.length > 0;
+    validValuesCount > 0;
 
   const goalDisplayValueNormal =
-    goalActive &&
-    typeof goalValue === "number" &&
-    typeof maxVal === "number" &&
-    typeof minVal === "number"
-      ? invertYAxis
-        ? roundGoalDisplayValue(
-            maxVal,
-            minVal,
-            goalValue,
-            metricDefinition.decimals
-          )
-        : goalValue
-      : goalActive && typeof goalValue === "number"
-      ? goalValue
+    goalActive && typeof goalValue === "number"
+      ? getChartGoalValue({
+          card,
+          goalValue,
+          range: valueRange,
+        })
       : null;
 
   const goalDisplayValueFullscreen =
     goalActive && typeof goalValue === "number" ? goalValue : null;
+
+  const trendColorClass =
+    summary.trend.performance === "better"
+      ? "text-emerald-500"
+      : summary.trend.performance === "worse"
+      ? "text-rose-500"
+      : "text-primary";
 
   const renderTrendChart = ({
     data,
@@ -858,22 +822,14 @@ function AnalyzeMetricCard({
               Trend
             </p>
             <div className="mt-2 flex-1">
-              <p
-                className={`text-sm font-semibold ${
-                  trend.performance === "better"
-                    ? "text-emerald-500"
-                    : trend.performance === "worse"
-                    ? "text-rose-500"
-                    : "text-primary"
-                }`}
-              >
-                {trend.label}
+              <p className={`text-sm font-semibold ${trendColorClass}`}>
+                {summary.trend.label}
               </p>
               <p className="mt-1 text-xs text-muted">
-                {trend.delta === null
+                {summary.trend.delta === null
                   ? "—"
-                  : `${trend.delta > 0 ? "+" : ""}${formatMetricNumber(
-                      trend.delta,
+                  : `${summary.trend.delta > 0 ? "+" : ""}${formatMetricNumber(
+                      summary.trend.delta,
                       metricDefinition.decimals
                     )} ${displayUnit}`}
               </p>
@@ -886,7 +842,7 @@ function AnalyzeMetricCard({
             </p>
             <div className="mt-2 flex-1">
               <p className="text-sm font-semibold text-primary">
-                {rawData.length}
+                {validValuesCount}
               </p>
               <p className="mt-1 text-xs text-muted">im gewählten Zeitraum</p>
             </div>
@@ -898,7 +854,8 @@ function AnalyzeMetricCard({
             </p>
             <div className="mt-2 flex-1">
               <p className="text-sm font-semibold text-primary">
-                {formatMetricNumber(avgVal, metricDefinition.decimals) ?? "—"}
+                {formatMetricNumber(summary.avg, metricDefinition.decimals) ??
+                  "—"}
               </p>
               <p className="mt-1 text-xs text-muted">{displayUnit}</p>
             </div>
@@ -910,14 +867,16 @@ function AnalyzeMetricCard({
               if (
                 !goalActive ||
                 typeof goalValue !== "number" ||
-                rawData.length === 0
+                validValuesCount === 0
               ) {
                 return;
               }
               setChartMode((prev) => (prev === "trend" ? "goal" : "trend"));
             }}
             className={`flex min-h-[104px] flex-col rounded-2xl border border-subtle bg-surface-2 p-3 text-left transition-all ${
-              goalActive && typeof goalValue === "number" && rawData.length > 0
+              goalActive &&
+              typeof goalValue === "number" &&
+              validValuesCount > 0
                 ? "cursor-pointer hover:border-[#FFD300]/40 hover:bg-[#FFD300]/5"
                 : "cursor-default"
             }`}
@@ -941,17 +900,21 @@ function AnalyzeMetricCard({
               ) : (
                 <>
                   <p className="text-sm font-semibold text-primary">
-                    {formatMetricNumber(minVal, metricDefinition.decimals) ??
-                      "—"}{" "}
+                    {formatMetricNumber(
+                      summary.min,
+                      metricDefinition.decimals
+                    ) ?? "—"}{" "}
                     /{" "}
-                    {formatMetricNumber(maxVal, metricDefinition.decimals) ??
-                      "—"}
+                    {formatMetricNumber(
+                      summary.max,
+                      metricDefinition.decimals
+                    ) ?? "—"}
                   </p>
                   <p className="mt-1 text-xs text-muted">
                     Letzter Eintrag:{" "}
-                    {rawData.length
+                    {chartData.length
                       ? formatCompactDate(
-                          rawData[rawData.length - 1]?.recordedAt
+                          chartData[chartData.length - 1]?.recordedAt
                         )
                       : "—"}
                   </p>
@@ -1020,21 +983,17 @@ function AnalyzeMetricCard({
                   Trend
                 </p>
                 <p
-                  className={`mt-2 text-base font-semibold ${
-                    trend.performance === "better"
-                      ? "text-emerald-500"
-                      : trend.performance === "worse"
-                      ? "text-rose-500"
-                      : "text-primary"
-                  }`}
+                  className={`mt-2 text-base font-semibold ${trendColorClass}`}
                 >
-                  {trend.label}
+                  {summary.trend.label}
                 </p>
                 <p className="mt-1 text-sm text-muted">
-                  {trend.delta === null
+                  {summary.trend.delta === null
                     ? "—"
-                    : `${trend.delta > 0 ? "+" : ""}${formatMetricNumber(
-                        trend.delta,
+                    : `${
+                        summary.trend.delta > 0 ? "+" : ""
+                      }${formatMetricNumber(
+                        summary.trend.delta,
                         metricDefinition.decimals
                       )} ${displayUnit}`}
                 </p>
@@ -1045,7 +1004,7 @@ function AnalyzeMetricCard({
                   Einträge
                 </p>
                 <p className="mt-2 text-base font-semibold text-primary">
-                  {rawData.length}
+                  {validValuesCount}
                 </p>
                 <p className="mt-1 text-sm text-muted">im Zeitraum</p>
               </div>
@@ -1055,7 +1014,8 @@ function AnalyzeMetricCard({
                   Durchschnitt
                 </p>
                 <p className="mt-2 text-base font-semibold text-primary">
-                  {formatMetricNumber(avgVal, metricDefinition.decimals) ?? "—"}
+                  {formatMetricNumber(summary.avg, metricDefinition.decimals) ??
+                    "—"}
                 </p>
                 <p className="mt-1 text-sm text-muted">{displayUnit}</p>
               </div>

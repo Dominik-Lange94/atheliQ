@@ -178,7 +178,6 @@ export default function MainChart({
     }
 
     const endDate = new Date(anchorDate);
-
     const range = TIME_RANGES.find((r) => r.key === timeRange);
     const startDate = new Date(endDate);
     startDate.setDate(startDate.getDate() - ((range?.days ?? 30) - 1));
@@ -259,13 +258,17 @@ export default function MainChart({
         })
       : null;
 
+  const validValueCount = rawValues.filter(
+    (v): v is number => typeof v === "number" && Number.isFinite(v)
+  ).length;
+
   const goalStats =
     displayCard?.goalEnabled && typeof displayCard.goalValue === "number"
       ? summary.goal
       : {
-          total: rawValues.filter((v) => typeof v === "number").length,
+          total: validValueCount,
           reached: 0,
-          remaining: 0,
+          remaining: validValueCount,
           percent: 0,
         };
 
@@ -279,14 +282,12 @@ export default function MainChart({
           month: "2-digit",
         })}`;
 
-  const goalDirectionLabel =
-    displayCard?.goalDirection === "lose"
-      ? "Abnehmen"
-      : displayCard?.goalDirection === "gain"
-      ? "Zunehmen"
-      : displayCard?.goalDirection === "max"
-      ? "Obergrenze"
-      : "Mindestziel";
+  const trendColorClass =
+    summary.trend.performance === "better"
+      ? "text-emerald-500"
+      : summary.trend.performance === "worse"
+      ? "text-rose-500"
+      : "text-primary";
 
   return (
     <div className="rounded-2xl border border-subtle bg-surface p-5">
@@ -391,19 +392,6 @@ export default function MainChart({
 
       {!isLoading && chartData.length > 0 && (
         <div className="mb-3 flex flex-wrap items-center gap-3">
-          {displayCard?.goalEnabled &&
-            typeof displayCard.goalValue === "number" && (
-              <div className="flex items-center gap-1.5 rounded-lg border border-[#FFD300]/40 bg-[#FFD300]/10 px-2.5 py-1 text-xs font-medium text-[#FFD300]">
-                <span className="inline-block w-4 border-t-2 border-dashed border-[#FFD300]" />
-                Ziel ·{" "}
-                {formatMetricNumber(
-                  displayCard.goalValue,
-                  metricDefinition.decimals
-                )}{" "}
-                {displayUnit} · {goalDirectionLabel}
-              </div>
-            )}
-
           <button
             onClick={() => setTrendActive((v) => !v)}
             className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-medium transition-all ${
@@ -446,29 +434,6 @@ export default function MainChart({
         </div>
       )}
 
-      {displayCard?.goalEnabled &&
-        typeof displayCard.goalValue === "number" &&
-        !isLoading &&
-        chartData.length > 0 && (
-          <div className="mb-4 rounded-xl border border-subtle bg-surface-2 px-3 py-2">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <span className="text-[10px] text-muted">Ziel-Status</span>
-              <span className="text-xs font-medium text-[#FFD300]">
-                {formatMetricNumber(
-                  displayCard.goalValue,
-                  metricDefinition.decimals
-                )}{" "}
-                {displayUnit}
-              </span>
-            </div>
-
-            <p className="mt-1 text-[10px] text-muted">
-              {goalStats.reached} von {goalStats.total} Einträgen (
-              {goalStats.percent}%) erfüllen das Ziel
-            </p>
-          </div>
-        )}
-
       {isLoading ? (
         <div className="flex h-48 items-center justify-center">
           <div
@@ -505,7 +470,7 @@ export default function MainChart({
               tick={{ fill: chartUi.tick, fontSize: 11 }}
               axisLine={false}
               tickLine={false}
-              domain={["auto", "auto"]}
+              domain={[0, "auto"]}
             />
 
             <Tooltip
@@ -647,6 +612,82 @@ export default function MainChart({
             )}
           </ComposedChart>
         </ResponsiveContainer>
+      )}
+
+      {!isLoading && chartData.length > 0 && (
+        <div className="mt-4 grid gap-3 sm:grid-cols-4">
+          <div className="rounded-xl border border-subtle bg-surface-2 px-3 py-2">
+            <p className="text-[10px] uppercase tracking-[0.16em] text-muted">
+              Trend
+            </p>
+            <p className={`mt-1 text-sm font-semibold ${trendColorClass}`}>
+              {summary.trend.label}
+            </p>
+            <p className="mt-1 text-xs text-muted">
+              {summary.trend.delta === null
+                ? "—"
+                : `${summary.trend.delta > 0 ? "+" : ""}${formatMetricNumber(
+                    summary.trend.delta,
+                    metricDefinition.decimals
+                  )} ${displayUnit}`}
+            </p>
+          </div>
+
+          <div className="rounded-xl border border-subtle bg-surface-2 px-3 py-2">
+            <p className="text-[10px] uppercase tracking-[0.16em] text-muted">
+              Einträge
+            </p>
+            <p className="mt-1 text-sm font-semibold text-primary">
+              {validValueCount}
+            </p>
+            <p className="mt-1 text-xs text-muted">im gewählten Zeitraum</p>
+          </div>
+
+          <div className="rounded-xl border border-subtle bg-surface-2 px-3 py-2">
+            <p className="text-[10px] uppercase tracking-[0.16em] text-muted">
+              Durchschnitt
+            </p>
+            <p className="mt-1 text-sm font-semibold text-primary">
+              {formatMetricNumber(summary.avg, metricDefinition.decimals) ??
+                "—"}
+            </p>
+            <p className="mt-1 text-xs text-muted">{displayUnit}</p>
+          </div>
+
+          <div className="rounded-xl border border-subtle bg-surface-2 px-3 py-2">
+            <p className="text-[10px] uppercase tracking-[0.16em] text-muted">
+              {displayCard?.goalEnabled ? "Zielstatus" : "Min / Max"}
+            </p>
+
+            {displayCard?.goalEnabled &&
+            typeof displayCard.goalValue === "number" ? (
+              <>
+                <p className="mt-1 text-sm font-semibold text-primary">
+                  {goalStats.percent}% erreicht
+                </p>
+                <p className="mt-1 text-xs text-[#c99700] dark:text-[#FFD300]">
+                  Ziel:{" "}
+                  {formatMetricNumber(
+                    displayCard.goalValue,
+                    metricDefinition.decimals
+                  )}{" "}
+                  {displayUnit}
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="mt-1 text-sm font-semibold text-primary">
+                  {formatMetricNumber(summary.min, metricDefinition.decimals) ??
+                    "—"}{" "}
+                  /{" "}
+                  {formatMetricNumber(summary.max, metricDefinition.decimals) ??
+                    "—"}
+                </p>
+                <p className="mt-1 text-xs text-muted">{displayUnit}</p>
+              </>
+            )}
+          </div>
+        </div>
       )}
     </div>
   );
