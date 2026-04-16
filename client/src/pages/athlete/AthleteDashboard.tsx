@@ -503,6 +503,97 @@ export default function AthleteDashboard() {
             <WeatherClock />
           </div>
         </div>
+        <div className="rounded-2xl border border-subtle bg-surface p-3">
+          <div className="flex items-center gap-2">
+            {/* ← scrolls window AND selects previous day */}
+            <button
+              onClick={() => {
+                shiftWindowLeft();
+                goToPrevDay();
+              }}
+              className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg border border-subtle bg-surface-2 text-sm text-secondary transition-all hover:border-strong hover:text-primary"
+            >
+              ←
+            </button>
+
+            <div className="flex flex-1 flex-col gap-1">
+              {/* Month label — show month of first visible day */}
+              <p className="px-1 text-[10px] font-medium text-muted">
+                {new Date(dayWindow[0].dateStr + "T12:00:00").toLocaleDateString("de-DE", { month: "long", year: "numeric" })}
+              </p>
+
+              <div className="flex gap-1">
+                {dayWindow.map(({ dateStr, day, weekday }) => {
+                  const isSel = dateStr === selectedDate;
+                  const isT = dateStr === TODAY;
+                  const isFuture = dateStr > TODAY;
+                  const d = new Date(dateStr + "T12:00:00");
+                  // Show month abbreviation when day is 1st or first in window
+                  const showMonth = d.getDate() === 1;
+
+                  return (
+                    <button
+                      key={dateStr}
+                      onClick={() => !isFuture && selectDate(dateStr)}
+                      disabled={isFuture}
+                      className={`flex flex-1 flex-col items-center gap-0.5 rounded-lg border py-1.5 transition-all ${
+                        isSel
+                          ? "border-[#FFD300]/40 bg-[#FFD300]/12"
+                          : isT
+                          ? "border-subtle bg-surface-2 hover:border-strong"
+                          : isFuture
+                          ? "cursor-not-allowed border-transparent opacity-20"
+                          : "border-transparent hover:border-subtle hover:bg-surface-2"
+                      }`}
+                    >
+                      <span
+                        className={`text-[9px] font-medium uppercase tracking-wide ${
+                          isSel ? "text-[#FFD300]" : isT ? "text-secondary" : "text-muted"
+                        }`}
+                      >
+                        {weekday}
+                      </span>
+
+                      <span
+                        className={`text-xs font-semibold leading-none ${
+                          isSel ? "text-[#FFD300]" : isT ? "text-primary" : "text-secondary"
+                        }`}
+                      >
+                        {day}
+                      </span>
+
+                      {showMonth && (
+                        <span className="text-[8px] text-muted leading-none mt-0.5">
+                          {d.toLocaleDateString("de-DE", { month: "short" })}
+                        </span>
+                      )}
+
+                      {isT && !isSel && !showMonth && (
+                        <span className="mt-0.5 h-1 w-1 rounded-full bg-[#FFD300]/50" />
+                      )}
+                      {isSel && !showMonth && (
+                        <span className="mt-0.5 h-1 w-1 rounded-full bg-[#FFD300]" />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* → scrolls window AND selects next day */}
+            <button
+              onClick={() => {
+                shiftWindowRight();
+                goToNextDay();
+              }}
+              disabled={windowOffset >= 0 && isToday}
+              className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg border border-subtle bg-surface-2 text-sm text-secondary transition-all hover:border-strong hover:text-primary disabled:cursor-not-allowed disabled:opacity-30"
+            >
+              →
+            </button>
+          </div>
+        </div>
+
         <MainChart
           key={orderedCards
             .map((c: any) => `${c._id}-${c.chartType}`)
@@ -646,82 +737,6 @@ export default function AthleteDashboard() {
               ))}
             </div>
           )}
-        </div>
-
-        <div className="rounded-2xl border border-subtle bg-surface p-3">
-          <div className="flex items-center gap-2">
-            <button
-              onClick={shiftWindowLeft}
-              className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg border border-subtle bg-surface-2 text-sm text-secondary transition-all hover:border-strong hover:text-primary"
-            >
-              ←
-            </button>
-
-            <div className="flex flex-1 gap-1">
-              {dayWindow.map(({ dateStr, day, weekday }) => {
-                const isSel = dateStr === selectedDate;
-                const isT = dateStr === TODAY;
-                const isFuture = dateStr > TODAY;
-
-                return (
-                  <button
-                    key={dateStr}
-                    onClick={() => !isFuture && selectDate(dateStr)}
-                    disabled={isFuture}
-                    className={`flex flex-1 flex-col items-center gap-0.5 rounded-lg border py-1.5 transition-all ${
-                      isSel
-                        ? "border-[#FFD300]/40 bg-[#FFD300]/12"
-                        : isT
-                        ? "border-subtle bg-surface-2 hover:border-strong"
-                        : isFuture
-                        ? "cursor-not-allowed border-transparent opacity-20"
-                        : "border-transparent hover:border-subtle hover:bg-surface-2"
-                    }`}
-                  >
-                    <span
-                      className={`text-[9px] font-medium uppercase tracking-wide ${
-                        isSel
-                          ? "text-[#FFD300]"
-                          : isT
-                          ? "text-secondary"
-                          : "text-muted"
-                      }`}
-                    >
-                      {weekday}
-                    </span>
-
-                    <span
-                      className={`text-xs font-semibold leading-none ${
-                        isSel
-                          ? "text-[#FFD300]"
-                          : isT
-                          ? "text-primary"
-                          : "text-secondary"
-                      }`}
-                    >
-                      {day}
-                    </span>
-
-                    {isT && !isSel && (
-                      <span className="mt-0.5 h-1 w-1 rounded-full bg-[#FFD300]/50" />
-                    )}
-
-                    {isSel && (
-                      <span className="mt-0.5 h-1 w-1 rounded-full bg-[#FFD300]" />
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-
-            <button
-              onClick={shiftWindowRight}
-              disabled={windowOffset >= 0}
-              className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg border border-subtle bg-surface-2 text-sm text-secondary transition-all hover:border-strong hover:text-primary disabled:cursor-not-allowed disabled:opacity-30"
-            >
-              →
-            </button>
-          </div>
         </div>
       </main>
 
