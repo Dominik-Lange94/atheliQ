@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 import {
   ResponsiveContainer,
   ComposedChart,
@@ -10,13 +10,38 @@ import {
   CartesianGrid,
   Tooltip,
   ReferenceLine,
+  PieChart,
+  Pie,
+  Cell,
 } from "recharts";
+import { FiArrowLeft, FiMaximize2, FiX } from "react-icons/fi";
 import { useCoachAthletes, useAthleteStats } from "../../hooks/useStats";
 import { useAuth } from "../../hooks/useAuth";
 import { useTheme } from "../../hooks/useTheme";
 import BrandLogo from "../../components/layout/BrandLogo";
+import {
+  resolveMetricDefinition,
+  normalizeMetricEntries,
+  shouldInvertYAxis,
+  resolveGoalMode,
+  isGoalReached,
+  getGoalStats,
+  formatMetricNumber,
+  getTrendForCard,
+  movingAverage as metricMovingAverage,
+} from "../../lib/metrics";
 
 type TimeRangeKey = "1W" | "1M" | "3M" | "1Y" | "custom";
+type ChartMode = "trend" | "goal";
+
+type ChartRow = {
+  date: string;
+  dateISO: string;
+  value: number | null;
+  _real: number | null;
+  recordedAt: string | null;
+  trend: number | null;
+};
 
 const DEFAULT_COLORS: Record<string, string> = {
   heartrate: "rose",
@@ -98,48 +123,6 @@ function formatRangeLabel(
   return TIME_RANGES.find((r) => r.key === timeRange)?.label ?? "Zeitraum";
 }
 
-function calculateTrendLabel(first: number | null, last: number | null) {
-  if (typeof first !== "number" || typeof last !== "number") {
-    return {
-      label: "Zu wenig Daten",
-      delta: null as number | null,
-      direction: "flat" as "up" | "down" | "flat",
-    };
-  }
-
-  const delta = Number((last - first).toFixed(2));
-
-  if (delta > 0) {
-    return {
-      label: "Steigend",
-      delta,
-      direction: "up" as const,
-    };
-  }
-
-  if (delta < 0) {
-    return {
-      label: "Fallend",
-      delta,
-      direction: "down" as const,
-    };
-  }
-
-  return {
-    label: "Stabil",
-    delta: 0,
-    direction: "flat" as const,
-  };
-}
-
-function movingAverage(data: number[], windowSize: number): number[] {
-  return data.map((_, i) => {
-    const start = Math.max(0, i - windowSize + 1);
-    const slice = data.slice(start, i + 1);
-    return +(slice.reduce((a, b) => a + b, 0) / slice.length).toFixed(2);
-  });
-}
-
 function getRangeDates(
   timeRange: TimeRangeKey,
   customFrom: string,
@@ -160,6 +143,53 @@ function getRangeDates(
   };
 }
 
+function roundGoalDisplayValue(
+  maxVal: number,
+  minVal: number,
+  goalValue: number,
+  decimals = 2
+) {
+  return Number((maxVal + minVal - goalValue).toFixed(decimals));
+}
+
+function getInsight(
+  card: any,
+  goalActive: boolean,
+  goalValue: number | null,
+  firstVal: number | null,
+  lastVal: number | null
+) {
+  if (lastVal == null) return null;
+
+  const trend = getTrendForCard({
+    card,
+    first: firstVal,
+    last: lastVal,
+  });
+
+  const goalMode = resolveGoalMode(card);
+
+  if (goalActive && goalValue != null) {
+    const reached = isGoalReached({
+      value: lastVal,
+      goalValue,
+      goalMode,
+    });
+
+    if (reached) return { text: "Ziel erreicht", color: "emerald" };
+  }
+
+  if (trend.performance === "better") {
+    return { text: "Verbesserung", color: "emerald" };
+  }
+
+  if (trend.performance === "worse") {
+    return { text: "Verschlechterung", color: "rose" };
+  }
+
+  return { text: "Stabil", color: "gray" };
+}
+
 function AnalyzeMetricCard({
   card,
   entries,
@@ -171,17 +201,19 @@ function AnalyzeMetricCard({
   latestValue?: number | null;
   resolvedTheme: "light" | "dark";
 }) {
+  const [chartMode, setChartMode] = useState<ChartMode>("trend");
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
   const cardColor = getCardColor(card);
   const displayUnit = getDisplayUnit(card.unit);
   const chartType = card.chartType ?? "line";
 
-  const isPaceCard = card.unit === "min/km";
-  const isSpeedCard = card.unit === "km/h";
+  const metricDefinition = useMemo(() => resolveMetricDefinition(card), [card]);
+  const invertYAxis = useMemo(() => shouldInvertYAxis(card), [card]);
+  const goalMode = useMemo(() => resolveGoalMode(card), [card]);
 
   const goalActive = Boolean(card.goalEnabled);
   const goalValue = typeof card.goalValue === "number" ? card.goalValue : null;
-  const goalDirection =
-    card.goalDirection ?? (card.type === "weight" ? "lose" : "min");
 
   const chartUi = useMemo(() => {
     if (resolvedTheme === "dark") {
@@ -192,6 +224,9 @@ function AnalyzeMetricCard({
         tooltipBorder: `${cardColor}30`,
         tooltipText: "#e2e8f0",
         trend: "rgba(255,255,255,0.45)",
+        goalRest: "#2b2f3a",
+        pieLabel: "#e2e8f0",
+        overlayBg: "rgba(3,6,12,0.72)",
       };
     }
 
@@ -202,29 +237,52 @@ function AnalyzeMetricCard({
       tooltipBorder: `${cardColor}35`,
       tooltipText: "#111827",
       trend: "rgba(15,23,42,0.35)",
+      goalRest: "#e5e7eb",
+      pieLabel: "#111827",
+      overlayBg: "rgba(15,23,42,0.42)",
     };
   }, [resolvedTheme, cardColor]);
 
-  const rawData = (entries ?? []).map((e: any) => {
-    let value = e.value;
+  useEffect(() => {
+    if (!isFullscreen) return;
 
-    if (isPaceCard && e.secondaryValue && e.value) {
-      value = +(e.secondaryValue / e.value).toFixed(2);
-    }
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsFullscreen(false);
+      }
+    };
 
-    if (isSpeedCard && e.secondaryValue && e.value) {
-      value = +(e.value / (e.secondaryValue / 60)).toFixed(1);
-    }
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", onKeyDown);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [isFullscreen]);
+
+  const normalizedEntries = normalizeMetricEntries(card, entries ?? []);
+
+  const rawData = normalizedEntries.map((entry, index) => {
+    const original = entries?.[index];
+    const recordedAt = original?.recordedAt
+      ? new Date(original.recordedAt)
+      : null;
+    const isValidDate =
+      recordedAt instanceof Date && !Number.isNaN(recordedAt.getTime());
 
     return {
-      date: new Date(e.recordedAt).toLocaleDateString("de-DE", {
-        day: "2-digit",
-        month: "short",
-      }),
-      dateISO: toDateStr(new Date(e.recordedAt)),
-      value,
-      _real: value,
-      recordedAt: e.recordedAt,
+      date: isValidDate
+        ? recordedAt.toLocaleDateString("de-DE", {
+            day: "2-digit",
+            month: "short",
+          })
+        : "—",
+      dateISO: isValidDate ? toDateStr(recordedAt) : "",
+      value: entry.rawValue,
+      _real: entry.rawValue,
+      recordedAt: isValidDate ? recordedAt.toISOString() : null,
     };
   });
 
@@ -239,7 +297,7 @@ function AnalyzeMetricCard({
         (
           numericValues.reduce((sum, value) => sum + value, 0) /
           numericValues.length
-        ).toFixed(2)
+        ).toFixed(metricDefinition.decimals)
       )
     : null;
   const firstVal = numericValues.length ? numericValues[0] : null;
@@ -247,8 +305,13 @@ function AnalyzeMetricCard({
     ? numericValues[numericValues.length - 1]
     : null;
 
-  const trend = calculateTrendLabel(firstVal, lastVal);
-  const insight = getInsight(card, trend, goalActive, goalValue, lastVal);
+  const trend = getTrendForCard({
+    card,
+    first: firstVal,
+    last: lastVal,
+  });
+
+  const insight = getInsight(card, goalActive, goalValue, firstVal, lastVal);
 
   const insightColorClass =
     insight?.color === "emerald"
@@ -257,357 +320,776 @@ function AnalyzeMetricCard({
       ? "text-rose-500"
       : "text-muted";
 
-  const trendValues = movingAverage(
-    rawData.map((d) => d.value),
-    Math.min(7, Math.max(1, rawData.length))
-  );
+  const normalChartData =
+    invertYAxis && typeof maxVal === "number" && typeof minVal === "number"
+      ? rawData.map((d) => ({
+          ...d,
+          value:
+            typeof d.value === "number"
+              ? Number(
+                  (maxVal + minVal - d.value).toFixed(metricDefinition.decimals)
+                )
+              : null,
+        }))
+      : rawData;
 
-  const chartData = rawData.map((d, i) => ({
+  const fullscreenChartData = rawData.map((d) => ({
     ...d,
-    trend: trendValues[i],
+    value: d._real,
   }));
 
-  const goalMet =
-    goalActive && typeof goalValue === "number"
-      ? rawData.filter((d) => {
-          if (goalDirection === "gain" || goalDirection === "min") {
-            return d._real >= goalValue;
-          }
-          return d._real <= goalValue;
-        }).length
-      : 0;
+  const trendValuesNormal = metricMovingAverage(
+    normalChartData.map((d) => d.value),
+    Math.min(7, Math.max(1, normalChartData.length)),
+    metricDefinition.decimals
+  );
 
-  const goalPct =
-    goalActive && rawData.length > 0
-      ? Math.round((goalMet / rawData.length) * 100)
-      : 0;
+  const trendValuesFullscreen = metricMovingAverage(
+    fullscreenChartData.map((d) => d.value),
+    Math.min(7, Math.max(1, fullscreenChartData.length)),
+    metricDefinition.decimals
+  );
+
+  const chartData: ChartRow[] = normalChartData.map((d, i) => ({
+    ...d,
+    trend: trendValuesNormal[i] ?? null,
+  }));
+
+  const fullscreenData: ChartRow[] = fullscreenChartData.map((d, i) => ({
+    ...d,
+    trend: trendValuesFullscreen[i] ?? null,
+  }));
+
+  const goalStats =
+    goalActive && typeof goalValue === "number"
+      ? getGoalStats({
+          card,
+          values: rawData.map((d) => d._real),
+          goalValue,
+        })
+      : {
+          total: rawData.length,
+          reached: 0,
+          remaining: rawData.length,
+          percent: 0,
+        };
+
+  const goalMet = goalStats.reached;
+  const goalPct = goalStats.percent;
+  const goalRemaining = goalStats.remaining;
 
   const goalDirectionLabel =
-    goalDirection === "lose"
-      ? "Abnehmen"
-      : goalDirection === "gain"
-      ? "Zunehmen"
-      : goalDirection === "max"
-      ? "Obergrenze"
-      : "Mindestziel";
+    goalMode === "at_most" ? "Obergrenze" : "Mindestziel";
 
-  return (
-    <div className="overflow-hidden rounded-3xl border border-subtle bg-surface">
-      <div className="border-b border-subtle px-4 py-4 sm:px-5">
-        <div className="flex items-start justify-between gap-4">
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <span
-                className="inline-block h-2.5 w-2.5 rounded-full"
-                style={{ backgroundColor: cardColor }}
-              />
-              <div className="flex items-center gap-2">
-                <h3 className="truncate text-base font-semibold text-primary">
-                  {stripEmoji(card.label)}
-                </h3>
+  const goalChartData =
+    goalActive && typeof goalValue === "number"
+      ? [
+          { name: "Erreicht", value: goalMet },
+          { name: "Offen", value: goalRemaining },
+        ]
+      : [];
 
-                {insight && (
-                  <span className={`text-xs font-medium ${insightColorClass}`}>
-                    {insight.text}
-                  </span>
-                )}
-              </div>
-            </div>
+  const showGoalChart =
+    chartMode === "goal" &&
+    goalActive &&
+    typeof goalValue === "number" &&
+    rawData.length > 0;
 
-            <p className="mt-1 text-xs text-muted">
-              {displayUnit} · {card.type}
-            </p>
-          </div>
+  const goalDisplayValueNormal =
+    goalActive &&
+    typeof goalValue === "number" &&
+    typeof maxVal === "number" &&
+    typeof minVal === "number"
+      ? invertYAxis
+        ? roundGoalDisplayValue(
+            maxVal,
+            minVal,
+            goalValue,
+            metricDefinition.decimals
+          )
+        : goalValue
+      : goalActive && typeof goalValue === "number"
+      ? goalValue
+      : null;
 
-          <div className="rounded-xl border border-subtle bg-surface-2 px-3 py-2 text-right">
-            <p className="text-[10px] uppercase tracking-[0.18em] text-muted">
-              Letzter Wert
-            </p>
-            <p className="text-sm font-semibold text-primary">
-              {typeof latestValue === "number"
-                ? `${latestValue} ${displayUnit}`
-                : "—"}
-            </p>
-            {goalActive && typeof goalValue === "number" && (
-              <p className="mt-1 text-[10px] text-[#c99700] dark:text-[#FFD300]/80">
-                Ziel: {goalValue} {displayUnit}
-              </p>
-            )}
-          </div>
-        </div>
-      </div>
+  const goalDisplayValueFullscreen =
+    goalActive && typeof goalValue === "number" ? goalValue : null;
 
-      <div className="grid gap-3 border-b border-subtle px-4 py-4 sm:grid-cols-4 sm:px-5">
-        <div className="rounded-2xl border border-subtle bg-surface-2 p-3">
-          <p className="text-[10px] uppercase tracking-[0.16em] text-muted">
-            Trend
-          </p>
-          <p
-            className={`mt-1 text-sm font-semibold ${
-              trend.direction === "up"
-                ? "text-emerald-500"
-                : trend.direction === "down"
-                ? "text-rose-500"
-                : "text-primary"
-            }`}
+  const renderTrendChart = ({
+    data,
+    heightClass,
+    fullscreen = false,
+  }: {
+    data: ChartRow[];
+    heightClass: string;
+    fullscreen?: boolean;
+  }) => {
+    const yDomain = fullscreen ? [0, "auto"] : ["auto", "auto"];
+    const goalLineValue = fullscreen
+      ? goalDisplayValueFullscreen
+      : goalDisplayValueNormal;
+
+    return (
+      <div className={heightClass}>
+        <ResponsiveContainer width="100%" height="100%">
+          <ComposedChart
+            data={data}
+            margin={{
+              top: 8,
+              right: 8,
+              bottom: 0,
+              left: fullscreen ? 0 : -18,
+            }}
           >
-            {trend.label}
-          </p>
-          <p className="mt-1 text-xs text-muted">
-            {trend.delta === null
-              ? "—"
-              : `${trend.delta > 0 ? "+" : ""}${trend.delta} ${displayUnit}`}
-          </p>
-        </div>
+            <CartesianGrid strokeDasharray="3 3" stroke={chartUi.grid} />
 
-        <div className="rounded-2xl border border-subtle bg-surface-2 p-3">
-          <p className="text-[10px] uppercase tracking-[0.16em] text-muted">
-            Einträge
-          </p>
-          <p className="mt-1 text-sm font-semibold text-primary">
-            {rawData.length}
-          </p>
-          <p className="mt-1 text-xs text-muted">im gewählten Zeitraum</p>
-        </div>
+            <XAxis
+              dataKey="date"
+              tick={{ fill: chartUi.tick, fontSize: fullscreen ? 12 : 11 }}
+              axisLine={false}
+              tickLine={false}
+              interval="preserveStartEnd"
+            />
 
-        <div className="rounded-2xl border border-subtle bg-surface-2 p-3">
-          <p className="text-[10px] uppercase tracking-[0.16em] text-muted">
-            Durchschnitt
-          </p>
-          <p className="mt-1 text-sm font-semibold text-primary">
-            {typeof avgVal === "number" ? avgVal : "—"}
-          </p>
-          <p className="mt-1 text-xs text-muted">{displayUnit}</p>
-        </div>
+            <YAxis
+              tick={{ fill: chartUi.tick, fontSize: fullscreen ? 12 : 11 }}
+              axisLine={false}
+              tickLine={false}
+              domain={yDomain as any}
+            />
 
-        <div className="rounded-2xl border border-subtle bg-surface-2 p-3">
-          <p className="text-[10px] uppercase tracking-[0.16em] text-muted">
-            {goalActive ? "Zielstatus" : "Min / Max"}
-          </p>
-          {goalActive && typeof goalValue === "number" ? (
-            <>
-              <p className="mt-1 text-sm font-semibold text-primary">
-                {goalPct}% erreicht
-              </p>
-              <p className="mt-1 text-xs text-muted">
-                {goalMet} von {rawData.length} Einträgen · {goalDirectionLabel}
-              </p>
-            </>
-          ) : (
-            <>
-              <p className="mt-1 text-sm font-semibold text-primary">
-                {typeof minVal === "number" ? minVal : "—"} /{" "}
-                {typeof maxVal === "number" ? maxVal : "—"}
-              </p>
-              <p className="mt-1 text-xs text-muted">
-                Letzter Eintrag:{" "}
-                {rawData.length
-                  ? formatCompactDate(rawData[rawData.length - 1]?.recordedAt)
-                  : "—"}
-              </p>
-            </>
-          )}
-        </div>
-      </div>
+            <Tooltip
+              content={({ payload, label }) => {
+                if (!payload || !payload.length) return null;
 
-      <div className="px-4 py-4 sm:px-5">
-        {chartData.length === 0 ? (
-          <div className="flex h-64 items-center justify-center rounded-2xl border border-subtle bg-surface-2">
-            <p className="text-sm text-muted">
-              Keine Daten im gewählten Zeitraum
-            </p>
-          </div>
-        ) : (
-          <ResponsiveContainer width="100%" height={280}>
-            <ComposedChart
-              data={chartData}
-              margin={{ top: 8, right: 8, bottom: 0, left: -18 }}
-            >
-              <CartesianGrid strokeDasharray="3 3" stroke={chartUi.grid} />
+                const valueItem = payload.find((p) => p.dataKey === "value");
+                const trendItem = payload.find((p) => p.dataKey === "trend");
 
-              <XAxis
-                dataKey="date"
-                tick={{ fill: chartUi.tick, fontSize: 11 }}
-                axisLine={false}
-                tickLine={false}
-                interval="preserveStartEnd"
-              />
+                const value = valueItem?.payload?._real;
+                const trendValue = trendItem?.value;
 
-              <YAxis
-                tick={{ fill: chartUi.tick, fontSize: 11 }}
-                axisLine={false}
-                tickLine={false}
-                domain={["auto", "auto"]}
-              />
+                let missing: number | null = null;
+                if (
+                  goalActive &&
+                  typeof goalValue === "number" &&
+                  typeof value === "number"
+                ) {
+                  missing =
+                    goalMode === "at_least"
+                      ? Math.max(0, goalValue - value)
+                      : Math.max(0, value - goalValue);
+                }
 
-              <Tooltip
-                content={({ payload, label }) => {
-                  if (!payload || !payload.length) return null;
+                return (
+                  <div
+                    style={{
+                      background: chartUi.tooltipBg,
+                      border: `1px solid ${chartUi.tooltipBorder}`,
+                      borderRadius: "12px",
+                      padding: "10px 12px",
+                      fontSize: "13px",
+                      color: chartUi.tooltipText,
+                    }}
+                  >
+                    <div style={{ marginBottom: 4, opacity: 0.7 }}>{label}</div>
 
-                  const valueItem = payload.find((p) => p.dataKey === "value");
-                  const trendItem = payload.find((p) => p.dataKey === "trend");
+                    <div style={{ color: cardColor, fontWeight: 600 }}>
+                      {formatMetricNumber(value, metricDefinition.decimals)}{" "}
+                      {displayUnit}
+                    </div>
 
-                  const value = valueItem?.payload?._real;
-                  const trend = trendItem?.value;
-
-                  let missing = null;
-
-                  if (
-                    goalActive &&
-                    typeof goalValue === "number" &&
-                    typeof value === "number"
-                  ) {
-                    if (goalDirection === "gain" || goalDirection === "min") {
-                      missing = Math.max(0, goalValue - value);
-                    } else {
-                      missing = Math.max(0, value - goalValue);
-                    }
-                  }
-
-                  return (
-                    <div
-                      style={{
-                        background: chartUi.tooltipBg,
-                        border: `1px solid ${chartUi.tooltipBorder}`,
-                        borderRadius: "12px",
-                        padding: "10px 12px",
-                        fontSize: "13px",
-                        color: chartUi.tooltipText,
-                      }}
-                    >
-                      <div style={{ marginBottom: 4, opacity: 0.7 }}>
-                        {label}
-                      </div>
-
-                      <div style={{ color: cardColor, fontWeight: 600 }}>
-                        {value} {displayUnit}
-                      </div>
-
-                      {goalActive &&
-                        typeof goalValue === "number" &&
-                        missing !== null && (
-                          <div style={{ fontSize: 12, opacity: 0.8 }}>
-                            Noch {missing} {displayUnit} bis Ziel
-                          </div>
-                        )}
-
-                      {trend !== undefined && (
-                        <div style={{ fontSize: 12, opacity: 0.6 }}>
-                          Trend: {trend} {displayUnit}
+                    {goalActive &&
+                      typeof goalValue === "number" &&
+                      missing !== null && (
+                        <div style={{ fontSize: 12, opacity: 0.8 }}>
+                          Noch{" "}
+                          {formatMetricNumber(
+                            missing,
+                            metricDefinition.decimals
+                          )}{" "}
+                          {displayUnit} bis Ziel
                         </div>
                       )}
-                    </div>
-                  );
-                }}
+
+                    {typeof trendValue === "number" && (
+                      <div style={{ fontSize: 12, opacity: 0.6 }}>
+                        Trend:{" "}
+                        {formatMetricNumber(
+                          trendValue,
+                          metricDefinition.decimals
+                        )}{" "}
+                        {displayUnit}
+                      </div>
+                    )}
+                  </div>
+                );
+              }}
+            />
+
+            {data.length > 0 && (
+              <ReferenceLine
+                x={data[data.length - 1]?.date}
+                stroke={cardColor}
+                strokeWidth={1.5}
+                strokeOpacity={0.65}
+                strokeDasharray="4 3"
               />
+            )}
 
-              {chartData.length > 0 && (
+            {goalActive &&
+              typeof goalValue === "number" &&
+              typeof goalLineValue === "number" && (
                 <ReferenceLine
-                  x={chartData[chartData.length - 1]?.date}
-                  stroke={cardColor}
-                  strokeWidth={1.5}
-                  strokeOpacity={0.65}
-                  strokeDasharray="4 3"
-                />
-              )}
-
-              {goalActive && typeof goalValue === "number" && (
-                <ReferenceLine
-                  y={goalValue}
+                  y={goalLineValue}
                   stroke="#FFD300"
                   strokeWidth={1.5}
                   strokeDasharray="6 3"
-                  strokeOpacity={0.9}
+                  strokeOpacity={0.95}
+                  ifOverflow="extendDomain"
                   label={{
-                    value: `Ziel: ${goalValue} ${displayUnit}`,
+                    value: `Ziel: ${formatMetricNumber(
+                      goalValue,
+                      metricDefinition.decimals
+                    )} ${displayUnit}`,
                     position: "insideTopRight",
                     fill: "#FFD300",
-                    fontSize: 10,
+                    fontSize: fullscreen ? 11 : 10,
                   }}
                 />
               )}
 
-              {(chartType === "bar" || chartType === "mixed") && (
-                <Bar
-                  dataKey="value"
-                  fill={cardColor}
-                  fillOpacity={chartType === "mixed" ? 0.28 : 0.72}
-                  radius={[4, 4, 0, 0]}
-                  maxBarSize={28}
-                />
-              )}
+            {(chartType === "bar" || chartType === "mixed") && (
+              <Bar
+                dataKey="value"
+                fill={cardColor}
+                fillOpacity={chartType === "mixed" ? 0.28 : 0.72}
+                radius={[4, 4, 0, 0]}
+                maxBarSize={28}
+              />
+            )}
 
-              {(chartType === "line" || chartType === "mixed") && (
-                <Line
-                  type="monotone"
-                  dataKey="value"
-                  stroke={cardColor}
-                  strokeWidth={2}
-                  dot={
-                    goalActive && typeof goalValue === "number"
-                      ? (props: any) => {
-                          const { cx, cy, payload } = props;
-                          const met =
-                            goalDirection === "gain" || goalDirection === "min"
-                              ? payload._real >= goalValue
-                              : payload._real <= goalValue;
-
-                          return (
-                            <circle
-                              key={`dot-${cx}-${cy}`}
-                              cx={cx}
-                              cy={cy}
-                              r={3}
-                              fill={met ? "#ffffff" : cardColor}
-                            />
-                          );
-                        }
-                      : false
-                  }
-                  activeDot={{ r: 5, fill: cardColor }}
-                />
-              )}
-
+            {(chartType === "line" || chartType === "mixed") && (
               <Line
                 type="monotone"
-                dataKey="trend"
-                stroke={chartUi.trend}
-                strokeWidth={1.5}
-                dot={false}
-                activeDot={false}
-                connectNulls
+                dataKey="value"
+                stroke={cardColor}
+                strokeWidth={fullscreen ? 2.4 : 2}
+                dot={
+                  goalActive && typeof goalValue === "number"
+                    ? (props: any) => {
+                        const { cx, cy, payload } = props;
+                        const realValue = payload?._real;
+
+                        const met = isGoalReached({
+                          value: realValue,
+                          goalValue,
+                          goalMode,
+                        });
+
+                        return (
+                          <circle
+                            key={`dot-${cx}-${cy}`}
+                            cx={cx}
+                            cy={cy}
+                            r={fullscreen ? 3.5 : 3}
+                            fill={met ? "#ffffff" : cardColor}
+                          />
+                        );
+                      }
+                    : false
+                }
+                activeDot={{ r: fullscreen ? 6 : 5, fill: cardColor }}
               />
-            </ComposedChart>
-          </ResponsiveContainer>
-        )}
+            )}
+
+            <Line
+              type="monotone"
+              dataKey="trend"
+              stroke={chartUi.trend}
+              strokeWidth={fullscreen ? 1.8 : 1.5}
+              dot={false}
+              activeDot={false}
+              connectNulls
+            />
+          </ComposedChart>
+        </ResponsiveContainer>
       </div>
-    </div>
+    );
+  };
+
+  const renderMetricVisualization = (heightClass: string) => {
+    if (chartData.length === 0) {
+      return (
+        <div
+          className={`flex ${heightClass} items-center justify-center rounded-2xl border border-subtle bg-surface-2`}
+        >
+          <p className="text-sm text-muted">
+            Keine Daten im gewählten Zeitraum
+          </p>
+        </div>
+      );
+    }
+
+    if (showGoalChart) {
+      return (
+        <div className={heightClass}>
+          <div className="grid h-full gap-4 md:grid-cols-[240px_minmax(0,1fr)]">
+            <div className="flex h-full items-center justify-center rounded-2xl border border-subtle bg-surface-2 p-3">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={goalChartData}
+                    dataKey="value"
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={50}
+                    outerRadius={74}
+                    paddingAngle={3}
+                    stroke="none"
+                  >
+                    <Cell fill={cardColor} />
+                    <Cell fill={chartUi.goalRest} />
+                  </Pie>
+                  <Tooltip
+                    content={({ payload }) => {
+                      if (!payload || !payload.length) return null;
+
+                      const item = payload[0];
+                      return (
+                        <div
+                          style={{
+                            background: chartUi.tooltipBg,
+                            border: `1px solid ${chartUi.tooltipBorder}`,
+                            borderRadius: "12px",
+                            padding: "10px 12px",
+                            fontSize: "13px",
+                            color: chartUi.tooltipText,
+                          }}
+                        >
+                          <div style={{ fontWeight: 600 }}>{item.name}</div>
+                          <div style={{ marginTop: 4 }}>
+                            {item.value} Einträge
+                          </div>
+                        </div>
+                      );
+                    }}
+                  />
+                  <text
+                    x="50%"
+                    y="46%"
+                    textAnchor="middle"
+                    dominantBaseline="middle"
+                    fill={chartUi.pieLabel}
+                    style={{ fontSize: 24, fontWeight: 700 }}
+                  >
+                    {goalPct}%
+                  </text>
+                  <text
+                    x="50%"
+                    y="58%"
+                    textAnchor="middle"
+                    dominantBaseline="middle"
+                    fill={chartUi.tick}
+                    style={{
+                      fontSize: 11,
+                      letterSpacing: "0.08em",
+                      textTransform: "uppercase",
+                    }}
+                  >
+                    erreicht
+                  </text>
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="flex min-h-[128px] flex-col rounded-2xl border border-subtle bg-surface-2 p-3">
+                <p className="text-[10px] uppercase tracking-[0.16em] text-muted">
+                  Zielmodus
+                </p>
+                <div className="mt-2 flex-1">
+                  <p className="text-sm font-semibold text-primary">
+                    {goalDirectionLabel}
+                  </p>
+                  <p className="mt-1 text-xs text-muted">
+                    Zielwert:{" "}
+                    {formatMetricNumber(goalValue, metricDefinition.decimals)}{" "}
+                    {displayUnit}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex min-h-[128px] flex-col rounded-2xl border border-subtle bg-surface-2 p-3">
+                <p className="text-[10px] uppercase tracking-[0.16em] text-muted">
+                  Erreicht
+                </p>
+                <div className="mt-2 flex-1">
+                  <p className="text-sm font-semibold text-primary">
+                    {goalMet} von {goalStats.total}
+                  </p>
+                  <p className="mt-1 text-xs text-muted">
+                    Einträge im Zielbereich
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex min-h-[128px] flex-col rounded-2xl border border-subtle bg-surface-2 p-3">
+                <p className="text-[10px] uppercase tracking-[0.16em] text-muted">
+                  Offen
+                </p>
+                <div className="mt-2 flex-1">
+                  <p className="text-sm font-semibold text-primary">
+                    {goalRemaining}
+                  </p>
+                  <p className="mt-1 text-xs text-muted">
+                    Einträge noch nicht im Ziel
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex min-h-[128px] flex-col rounded-2xl border border-subtle bg-surface-2 p-3">
+                <p className="text-[10px] uppercase tracking-[0.16em] text-muted">
+                  Schnellblick
+                </p>
+                <div className="mt-2 flex-1">
+                  <p className="text-sm font-semibold text-primary">
+                    {goalPct >= 80
+                      ? "Sehr stark"
+                      : goalPct >= 60
+                      ? "Solide"
+                      : goalPct >= 40
+                      ? "Auf Kurs"
+                      : "Ausbaufähig"}
+                  </p>
+                  <p className="mt-1 text-xs text-muted">
+                    Zielerreichung im Zeitraum
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    return renderTrendChart({ data: chartData, heightClass });
+  };
+
+  const renderFullscreenVisualization = () => {
+    if (fullscreenData.length === 0) {
+      return (
+        <div className="flex h-full items-center justify-center rounded-2xl border border-subtle bg-surface">
+          <p className="text-sm text-muted">
+            Keine Daten im gewählten Zeitraum
+          </p>
+        </div>
+      );
+    }
+
+    return renderTrendChart({
+      data: fullscreenData,
+      heightClass: "h-full",
+      fullscreen: true,
+    });
+  };
+
+  return (
+    <>
+      <div className="flex h-full flex-col overflow-hidden rounded-3xl border border-subtle bg-surface">
+        <div className="border-b border-subtle px-4 py-4 sm:px-5">
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <span
+                  className="inline-block h-2.5 w-2.5 rounded-full"
+                  style={{ backgroundColor: cardColor }}
+                />
+                <div className="flex min-w-0 items-center gap-2">
+                  <h3 className="truncate text-base font-semibold text-primary">
+                    {stripEmoji(card.label)}
+                  </h3>
+
+                  {insight && (
+                    <span
+                      className={`text-xs font-medium ${insightColorClass}`}
+                    >
+                      {insight.text}
+                    </span>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => setIsFullscreen(true)}
+                    className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-subtle bg-surface-2 text-secondary transition-all hover:border-strong hover:text-primary"
+                    title="Chart vergrößern"
+                    aria-label={`Chart für ${stripEmoji(
+                      card.label
+                    )} im Vollbild öffnen`}
+                  >
+                    <FiMaximize2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              </div>
+
+              <p className="mt-1 text-xs text-muted">
+                {displayUnit} · {card.type}
+              </p>
+            </div>
+
+            <div className="rounded-xl border border-subtle bg-surface-2 px-3 py-2 text-right">
+              <p className="text-[10px] uppercase tracking-[0.18em] text-muted">
+                Letzter Wert
+              </p>
+              <p className="text-sm font-semibold text-primary">
+                {typeof latestValue === "number"
+                  ? `${formatMetricNumber(
+                      latestValue,
+                      metricDefinition.decimals
+                    )} ${displayUnit}`
+                  : "—"}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid gap-3 border-b border-subtle px-4 py-4 sm:grid-cols-4 sm:px-5">
+          <div className="flex min-h-[104px] flex-col rounded-2xl border border-subtle bg-surface-2 p-3">
+            <p className="text-[10px] uppercase tracking-[0.16em] text-muted">
+              Trend
+            </p>
+            <div className="mt-2 flex-1">
+              <p
+                className={`text-sm font-semibold ${
+                  trend.performance === "better"
+                    ? "text-emerald-500"
+                    : trend.performance === "worse"
+                    ? "text-rose-500"
+                    : "text-primary"
+                }`}
+              >
+                {trend.label}
+              </p>
+              <p className="mt-1 text-xs text-muted">
+                {trend.delta === null
+                  ? "—"
+                  : `${trend.delta > 0 ? "+" : ""}${formatMetricNumber(
+                      trend.delta,
+                      metricDefinition.decimals
+                    )} ${displayUnit}`}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex min-h-[104px] flex-col rounded-2xl border border-subtle bg-surface-2 p-3">
+            <p className="text-[10px] uppercase tracking-[0.16em] text-muted">
+              Einträge
+            </p>
+            <div className="mt-2 flex-1">
+              <p className="text-sm font-semibold text-primary">
+                {rawData.length}
+              </p>
+              <p className="mt-1 text-xs text-muted">im gewählten Zeitraum</p>
+            </div>
+          </div>
+
+          <div className="flex min-h-[104px] flex-col rounded-2xl border border-subtle bg-surface-2 p-3">
+            <p className="text-[10px] uppercase tracking-[0.16em] text-muted">
+              Durchschnitt
+            </p>
+            <div className="mt-2 flex-1">
+              <p className="text-sm font-semibold text-primary">
+                {formatMetricNumber(avgVal, metricDefinition.decimals) ?? "—"}
+              </p>
+              <p className="mt-1 text-xs text-muted">{displayUnit}</p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => {
+              if (
+                !goalActive ||
+                typeof goalValue !== "number" ||
+                rawData.length === 0
+              ) {
+                return;
+              }
+              setChartMode((prev) => (prev === "trend" ? "goal" : "trend"));
+            }}
+            className={`flex min-h-[104px] flex-col rounded-2xl border border-subtle bg-surface-2 p-3 text-left transition-all ${
+              goalActive && typeof goalValue === "number" && rawData.length > 0
+                ? "cursor-pointer hover:border-[#FFD300]/40 hover:bg-[#FFD300]/5"
+                : "cursor-default"
+            }`}
+          >
+            <p className="text-[10px] uppercase tracking-[0.16em] text-muted">
+              {goalActive ? "Zielstatus" : "Min / Max"}
+            </p>
+
+            <div className="mt-2 flex-1">
+              {goalActive && typeof goalValue === "number" ? (
+                <>
+                  <p className="text-sm font-semibold text-primary">
+                    {goalPct}% erreicht
+                  </p>
+                  <p className="mt-1 text-[10px] font-medium text-[#c99700] dark:text-[#FFD300]">
+                    Ziel:{" "}
+                    {formatMetricNumber(goalValue, metricDefinition.decimals)}{" "}
+                    {displayUnit}
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="text-sm font-semibold text-primary">
+                    {formatMetricNumber(minVal, metricDefinition.decimals) ??
+                      "—"}{" "}
+                    /{" "}
+                    {formatMetricNumber(maxVal, metricDefinition.decimals) ??
+                      "—"}
+                  </p>
+                  <p className="mt-1 text-xs text-muted">
+                    Letzter Eintrag:{" "}
+                    {rawData.length
+                      ? formatCompactDate(
+                          rawData[rawData.length - 1]?.recordedAt
+                        )
+                      : "—"}
+                  </p>
+                </>
+              )}
+            </div>
+          </button>
+        </div>
+
+        <div className="flex-1 px-4 py-4 sm:px-5">
+          {renderMetricVisualization("h-[280px]")}
+        </div>
+      </div>
+
+      {isFullscreen && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6"
+          style={{ background: chartUi.overlayBg }}
+          onClick={() => setIsFullscreen(false)}
+        >
+          <div
+            className="flex h-[92vh] w-full max-w-[1500px] flex-col overflow-hidden rounded-[28px] border border-subtle bg-app shadow-[0_24px_80px_rgba(0,0,0,0.35)]"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="border-b border-subtle px-5 py-4 sm:px-6">
+              <div className="flex items-start justify-between gap-4">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span
+                      className="inline-block h-2.5 w-2.5 rounded-full"
+                      style={{ backgroundColor: cardColor }}
+                    />
+                    <h2 className="truncate text-lg font-semibold text-primary">
+                      {stripEmoji(card.label)}
+                    </h2>
+
+                    {insight && (
+                      <span
+                        className={`text-sm font-medium ${insightColorClass}`}
+                      >
+                        {insight.text}
+                      </span>
+                    )}
+                  </div>
+
+                  <p className="mt-1 text-sm text-muted">
+                    {displayUnit} · {card.type} · Vollansicht
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setIsFullscreen(false)}
+                  className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-subtle bg-surface text-secondary transition-all hover:border-strong hover:text-primary"
+                  title="Schließen"
+                  aria-label="Vollansicht schließen"
+                >
+                  <FiX className="h-5 w-5" />
+                </button>
+              </div>
+            </div>
+
+            <div className="grid gap-3 border-b border-subtle px-5 py-4 sm:grid-cols-2 xl:grid-cols-4 sm:px-6">
+              <div className="rounded-2xl border border-subtle bg-surface p-4">
+                <p className="text-[10px] uppercase tracking-[0.16em] text-muted">
+                  Trend
+                </p>
+                <p
+                  className={`mt-2 text-base font-semibold ${
+                    trend.performance === "better"
+                      ? "text-emerald-500"
+                      : trend.performance === "worse"
+                      ? "text-rose-500"
+                      : "text-primary"
+                  }`}
+                >
+                  {trend.label}
+                </p>
+                <p className="mt-1 text-sm text-muted">
+                  {trend.delta === null
+                    ? "—"
+                    : `${trend.delta > 0 ? "+" : ""}${formatMetricNumber(
+                        trend.delta,
+                        metricDefinition.decimals
+                      )} ${displayUnit}`}
+                </p>
+              </div>
+
+              <div className="rounded-2xl border border-subtle bg-surface p-4">
+                <p className="text-[10px] uppercase tracking-[0.16em] text-muted">
+                  Einträge
+                </p>
+                <p className="mt-2 text-base font-semibold text-primary">
+                  {rawData.length}
+                </p>
+                <p className="mt-1 text-sm text-muted">im Zeitraum</p>
+              </div>
+
+              <div className="rounded-2xl border border-subtle bg-surface p-4">
+                <p className="text-[10px] uppercase tracking-[0.16em] text-muted">
+                  Durchschnitt
+                </p>
+                <p className="mt-2 text-base font-semibold text-primary">
+                  {formatMetricNumber(avgVal, metricDefinition.decimals) ?? "—"}
+                </p>
+                <p className="mt-1 text-sm text-muted">{displayUnit}</p>
+              </div>
+
+              <div className="rounded-2xl border border-subtle bg-surface p-4">
+                <p className="text-[10px] uppercase tracking-[0.16em] text-muted">
+                  Letzter Wert
+                </p>
+                <p className="mt-2 text-base font-semibold text-primary">
+                  {typeof latestValue === "number"
+                    ? `${formatMetricNumber(
+                        latestValue,
+                        metricDefinition.decimals
+                      )} ${displayUnit}`
+                    : "—"}
+                </p>
+                {goalActive && typeof goalValue === "number" && (
+                  <p className="mt-1 text-sm text-[#c99700] dark:text-[#FFD300]">
+                    Ziel:{" "}
+                    {formatMetricNumber(goalValue, metricDefinition.decimals)}{" "}
+                    {displayUnit}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <div className="min-h-0 flex-1 px-5 py-5 sm:px-6">
+              {renderFullscreenVisualization()}
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
-}
-
-function getInsight(
-  card: any,
-  trend: any,
-  goalActive: boolean,
-  goalValue: number | null,
-  lastVal: number | null
-) {
-  if (!lastVal) return null;
-
-  if (goalActive && goalValue != null) {
-    const reached =
-      card.goalDirection === "gain" || card.goalDirection === "min"
-        ? lastVal >= goalValue
-        : lastVal <= goalValue;
-
-    if (reached) return { text: "Ziel erreicht", color: "emerald" };
-  }
-
-  if (trend.direction === "up")
-    return { text: "Verbesserung", color: "emerald" };
-  if (trend.direction === "down") return { text: "Rückgang", color: "rose" };
-
-  return { text: "Stabil", color: "gray" };
 }
 
 export default function CoachAthleteAnalyzePage() {
@@ -655,13 +1137,14 @@ export default function CoachAthleteAnalyzePage() {
     const q = search.trim().toLowerCase();
 
     return visibleStats.filter((item: any) => {
-      const card = item.card;
-      const matchesType = typeFilter === "all" || card.type === typeFilter;
+      const currentCard = item.card;
+      const matchesType =
+        typeFilter === "all" || currentCard.type === typeFilter;
       const matchesSearch =
         !q ||
-        stripEmoji(card.label).toLowerCase().includes(q) ||
-        card.type.toLowerCase().includes(q) ||
-        card.unit.toLowerCase().includes(q);
+        stripEmoji(currentCard.label).toLowerCase().includes(q) ||
+        currentCard.type.toLowerCase().includes(q) ||
+        currentCard.unit.toLowerCase().includes(q);
 
       return matchesType && matchesSearch;
     });
@@ -696,19 +1179,7 @@ export default function CoachAthleteAnalyzePage() {
               className="flex h-10 w-10 items-center justify-center rounded-xl border border-subtle bg-surface text-secondary transition-all hover:border-strong hover:bg-surface-2 hover:text-primary"
               title="Zurück"
             >
-              <svg
-                className="h-5 w-5"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={1.7}
-                  d="M15 19l-7-7 7-7"
-                />
-              </svg>
+              <FiArrowLeft className="h-5 w-5" />
             </button>
 
             <BrandLogo showText={false} imageClassName="h-8 w-auto" />
@@ -761,7 +1232,7 @@ export default function CoachAthleteAnalyzePage() {
             </p>
             <p className="mt-1 text-2xl font-semibold text-primary">
               {typeof kpis.latestWeight === "number"
-                ? `${kpis.latestWeight} kg`
+                ? `${formatMetricNumber(kpis.latestWeight, 1)} kg`
                 : "—"}
             </p>
           </div>
@@ -810,14 +1281,14 @@ export default function CoachAthleteAnalyzePage() {
                 type="date"
                 value={customFrom}
                 onChange={(e) => setCustomFrom(e.target.value)}
-                className="rounded-xl border border-subtle bg-surface-2 px-3 py-2 text-sm text-primary focus:border-[#FFD300]/50 focus:outline-none"
+                className="themed-date-input rounded-xl border border-subtle bg-surface-2 px-3 py-2 text-sm text-primary focus:border-[#FFD300]/50 focus:outline-none"
               />
               <span className="text-sm text-muted">bis</span>
               <input
                 type="date"
                 value={customTo}
                 onChange={(e) => setCustomTo(e.target.value)}
-                className="rounded-xl border border-subtle bg-surface-2 px-3 py-2 text-sm text-primary focus:border-[#FFD300]/50 focus:outline-none"
+                className="themed-date-input rounded-xl border border-subtle bg-surface-2 px-3 py-2 text-sm text-primary focus:border-[#FFD300]/50 focus:outline-none"
               />
             </div>
           )}
@@ -864,7 +1335,7 @@ export default function CoachAthleteAnalyzePage() {
             </p>
           </div>
         ) : (
-          <div className="grid gap-4 xl:grid-cols-2">
+          <div className="grid auto-rows-fr gap-4 xl:grid-cols-2">
             {filteredStats.map((item: any) => {
               const latestValue =
                 item.entries?.[item.entries.length - 1]?.value ?? null;
