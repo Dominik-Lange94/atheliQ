@@ -50,6 +50,69 @@ const ICON_MAP: Record<string, ComponentType<{ className?: string }>> = {
   steps: IoFootstepsOutline, sleep: IoMoonOutline, custom: IoGridOutline,
 };
 
+const ICON_LIST: { key: string; label: string; Icon: ComponentType<{ className?: string }> }[] = [
+  { key: "walk", label: "Gehen", Icon: IoWalkOutline },
+  { key: "bicycle", label: "Fahrrad", Icon: IoBicycleOutline },
+  { key: "barbell", label: "Gewichte", Icon: IoBarbellOutline },
+  { key: "fitness", label: "Fitness", Icon: IoFitnessOutline },
+  { key: "football", label: "Fußball", Icon: IoFootballOutline },
+  { key: "basketball", label: "Basketball", Icon: IoBasketballOutline },
+  { key: "tennisball", label: "Tennis", Icon: IoTennisballOutline },
+  { key: "americanfb", label: "American Fb.", Icon: IoAmericanFootballOutline },
+  { key: "golf", label: "Golf", Icon: IoGolfOutline },
+  { key: "boat", label: "Rudern", Icon: IoBoatOutline },
+  { key: "stopwatch", label: "Stoppuhr", Icon: IoStopwatchOutline },
+  { key: "timer", label: "Timer", Icon: IoTimerOutline },
+  { key: "compass", label: "Kompass", Icon: IoCompassOutline },
+  { key: "flag", label: "Flagge", Icon: IoFlagOutline },
+  { key: "trophy", label: "Pokal", Icon: IoTrophyOutline },
+  { key: "medal", label: "Medaille", Icon: IoMedalOutline },
+  { key: "ribbon", label: "Ribbon", Icon: IoRibbonOutline },
+  { key: "heart", label: "Herz", Icon: IoHeartOutline },
+  { key: "pulse", label: "Puls", Icon: IoPulseOutline },
+  { key: "body", label: "Körper", Icon: IoBodyOutline },
+  { key: "footsteps", label: "Schritte", Icon: IoFootstepsOutline },
+  { key: "bandage", label: "Verband", Icon: IoBandageOutline },
+  { key: "medical", label: "Medizin", Icon: IoMedicalOutline },
+  { key: "nutrition", label: "Ernährung", Icon: IoNutritionOutline },
+  { key: "scale", label: "Waage", Icon: IoScaleOutline },
+  { key: "thermometer", label: "Temperatur", Icon: IoThermometerOutline },
+  { key: "eyedrop", label: "Augentropfen", Icon: IoEyedropOutline },
+  { key: "flame", label: "Feuer", Icon: IoFlameOutline },
+  { key: "moon", label: "Schlaf", Icon: IoMoonOutline },
+  { key: "bed", label: "Bett", Icon: IoBedOutline },
+  { key: "water", label: "Wasser", Icon: IoWaterOutline },
+  { key: "leaf", label: "Natur", Icon: IoLeafOutline },
+  { key: "flower", label: "Blume", Icon: IoFlowerOutline },
+  { key: "sun", label: "Sonne", Icon: IoSunnyOutline },
+  { key: "snow", label: "Schnee", Icon: IoSnowOutline },
+  { key: "earth", label: "Erde", Icon: IoEarthOutline },
+  { key: "bonfire", label: "Lagerfeuer", Icon: IoBonfireOutline },
+  { key: "trending", label: "Aufsteigend", Icon: IoTrendingUpOutline },
+  { key: "trenddown", label: "Absteigend", Icon: IoTrendingDownOutline },
+  { key: "speedo", label: "Tempo", Icon: IoSpeedometerOutline },
+  { key: "star", label: "Stern", Icon: IoStarOutline },
+  { key: "flash", label: "Blitz", Icon: IoFlashOutline },
+  { key: "rocket", label: "Rakete", Icon: IoRocketOutline },
+  { key: "infinite", label: "Unendlich", Icon: IoInfiniteOutline },
+  { key: "alarm", label: "Alarm", Icon: IoAlarmOutline },
+  { key: "thumbup", label: "Daumen hoch", Icon: IoThumbsUpOutline },
+  { key: "thumbdown", label: "Daumen runter", Icon: IoThumbsDownOutline },
+  { key: "grid", label: "Raster", Icon: IoGridOutline },
+  { key: "map", label: "Karte", Icon: IoMapOutline },
+  { key: "globe", label: "Globus", Icon: IoGlobeOutline },
+  { key: "location", label: "Standort", Icon: IoLocationOutline },
+  { key: "create", label: "Erstellen", Icon: IoCreateOutline },
+  { key: "build", label: "Bauen", Icon: IoBuildOutline },
+  { key: "paw", label: "Pfote", Icon: IoPawOutline },
+  { key: "fish", label: "Fisch", Icon: IoFishOutline },
+  { key: "rose", label: "Rose", Icon: IoRoseOutline },
+  { key: "dice", label: "Würfel", Icon: IoDiceOutline },
+  { key: "game", label: "Spiel", Icon: IoGameControllerOutline },
+  { key: "beer", label: "Bier", Icon: IoBeerOutline },
+  { key: "icecream", label: "Eis", Icon: IoIceCreamOutline },
+];
+
 function getCardIcon(card: { type: string; label: string }): ComponentType<{ className?: string }> {
   // Check for [iconKey] prefix from AddCardModal
   const match = card.label.match(/^\[([a-z]+)\]/);
@@ -352,6 +415,12 @@ export default function StatCard({
   const [showEdit, setShowEdit] = useState(false);
   const [editLabel, setEditLabel] = useState(displayLabel);
   const [editColor, setEditColor] = useState(localColor);
+  const [editIconKey, setEditIconKey] = useState(() => {
+    const m = card.label.match(/^\[([a-z]+)\]/);
+    return m ? m[1] : "";
+  });
+  const [showEditIconPicker, setShowEditIconPicker] = useState(false);
+  const [editIconSearch, setEditIconSearch] = useState("");
   const [editChartType, setEditChartType] = useState(localChartType);
   const [editGoalEnabled, setEditGoalEnabled] = useState(
     Boolean(card.goalEnabled)
@@ -366,6 +435,7 @@ export default function StatCard({
   const openEdit = () => {
     setEditLabel(localLabel);
     setEditColor(localColor);
+    setEditIconKey(() => { const m = card.label.match(/^\[([a-z]+)\]/); return m ? m[1] : ""; });
     setEditChartType(localChartType);
     setEditGoalEnabled(localGoalEnabled);
     setEditGoalValue(
@@ -378,8 +448,8 @@ export default function StatCard({
   };
 
   const handleSaveEdit = () => {
-    const newLabel = isCustom
-      ? editLabel.trim()
+    const newLabel = isCustom && editIconKey
+      ? `[${editIconKey}] ${editLabel.trim()}`
       : editLabel.trim();
 
     const parsedGoalValue =
@@ -623,11 +693,49 @@ export default function StatCard({
               <h3 className="font-semibold text-primary">Karte bearbeiten</h3>
               <button
                 onClick={() => setShowEdit(false)}
-                className="text-xl leading-none text-muted transition hover:text-primary"
+                className="flex h-7 w-7 items-center justify-center rounded-lg text-muted transition-colors hover:text-primary"
               >
-                ✕
+                <IoCloseOutline className="h-5 w-5" />
               </button>
             </div>
+
+            {/* Icon — only shown for custom cards */}
+            {isCustom && (
+              <div className="mb-4">
+                <label className="mb-1.5 block text-sm text-secondary">Icon</label>
+                {(() => {
+                  const EditIcon = ICON_MAP[editIconKey] ?? IoGridOutline;
+                  const filtered = editIconSearch.trim()
+                    ? ICON_LIST.filter((o) => o.label.toLowerCase().includes(editIconSearch.toLowerCase()) || o.key.includes(editIconSearch.toLowerCase()))
+                    : ICON_LIST;
+                  return (
+                    <>
+                      <button onClick={() => setShowEditIconPicker((v) => !v)}
+                        className="flex h-11 w-11 items-center justify-center rounded-xl border border-subtle bg-surface-2 transition-all hover:border-[#FFD300]/50">
+                        <EditIcon className="h-5 w-5 text-primary" />
+                      </button>
+                      {showEditIconPicker && (
+                        <div className="mt-2 rounded-xl border border-subtle bg-surface-2 p-3">
+                          <input value={editIconSearch} onChange={(e) => setEditIconSearch(e.target.value)}
+                            placeholder="Suchen…"
+                            className="mb-2 w-full rounded-lg border border-subtle bg-surface px-3 py-1.5 text-sm text-primary placeholder:text-muted focus:border-[#FFD300]/50 focus:outline-none" />
+                          <div className="grid grid-cols-8 gap-1 max-h-40 overflow-y-auto">
+                            {filtered.map(({ key, label: iconLabel, Icon }) => (
+                              <button key={key}
+                                onClick={() => { setEditIconKey(key); setShowEditIconPicker(false); setEditIconSearch(""); }}
+                                title={iconLabel}
+                                className={`flex items-center justify-center rounded-lg p-2 transition-all hover:bg-surface-3 ${editIconKey === key ? "bg-[#FFD300]/20 ring-1 ring-[#FFD300]/40" : ""}`}>
+                                <Icon className={`h-4 w-4 ${editIconKey === key ? "text-[#FFD300]" : "text-secondary"}`} />
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
+              </div>
+            )}
 
             <div className="mb-4">
               <label className="mb-1.5 block text-sm text-secondary">
