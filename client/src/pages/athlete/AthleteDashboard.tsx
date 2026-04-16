@@ -494,7 +494,7 @@ export default function AthleteDashboard() {
         <div className="flex items-center justify-between gap-4">
           <div>
             <h1 className="text-2xl font-semibold text-primary">
-              Hey, {user?.name?.split(" ")[0]} 👋
+              Hey, {user?.name?.split(" ")[0]}
             </h1>
             <p className="mt-1 text-sm text-muted">Deine Leistungsübersicht</p>
           </div>

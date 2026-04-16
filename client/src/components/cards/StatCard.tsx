@@ -1,5 +1,46 @@
 import { useState } from "react";
 import {
+  IoHeartOutline, IoFlameOutline, IoScaleOutline,
+  IoFootstepsOutline, IoMoonOutline,
+  IoWalkOutline, IoBicycleOutline, IoWaterOutline,
+  IoBarbellOutline, IoBodyOutline, IoFitnessOutline,
+  IoLeafOutline, IoSpeedometerOutline, IoTimerOutline,
+  IoTrophyOutline, IoTrendingUpOutline, IoNutritionOutline,
+  IoMedicalOutline, IoStarOutline, IoFlashOutline,
+  IoInfiniteOutline, IoCheckmarkCircleOutline, IoAddOutline,
+  IoChevronDownOutline, IoGridOutline,
+  IoPencilOutline, IoCloseOutline, IoCheckmarkOutline,
+  IoOpenOutline, IoTrashOutline, IoRemoveOutline,
+} from "react-icons/io5";
+import type { ComponentType } from "react";
+
+const ICON_MAP: Record<string, ComponentType<{ className?: string }>> = {
+  run: IoWalkOutline, bicycle: IoBicycleOutline, barbell: IoBarbellOutline,
+  fitness: IoFitnessOutline, body: IoBodyOutline, heart: IoHeartOutline,
+  flame: IoFlameOutline, scale: IoScaleOutline, footsteps: IoFootstepsOutline,
+  moon: IoMoonOutline, water: IoWaterOutline, leaf: IoLeafOutline,
+  speedo: IoSpeedometerOutline, timer: IoTimerOutline, trophy: IoTrophyOutline,
+  trending: IoTrendingUpOutline, nutrition: IoNutritionOutline,
+  medical: IoMedicalOutline, star: IoStarOutline, flash: IoFlashOutline,
+  infinite: IoInfiniteOutline, check: IoCheckmarkCircleOutline,
+  add: IoAddOutline, down: IoChevronDownOutline,
+  // built-in type icons
+  heartrate: IoHeartOutline, calories: IoFlameOutline, weight: IoScaleOutline,
+  steps: IoFootstepsOutline, sleep: IoMoonOutline, custom: IoGridOutline,
+};
+
+function getCardIcon(card: { type: string; label: string }): ComponentType<{ className?: string }> {
+  // Check for [iconKey] prefix from AddCardModal
+  const match = card.label.match(/^\[([a-z]+)\]/);
+  if (match && ICON_MAP[match[1]]) return ICON_MAP[match[1]];
+  // Fall back to type
+  return ICON_MAP[card.type] ?? IoGridOutline;
+}
+
+function getCleanCardLabel(label: string): string {
+  return label.replace(/^\[[a-z]+\]\s*/, '').replace(/^\p{Emoji}\s*/u, '');
+}
+import {
   useUpdateWeight,
   useRemoveCard,
   useLogEntry,
@@ -214,25 +255,8 @@ function getColorClasses(key: string) {
   return COLOR_OPTIONS.find((o) => o.key === key) ?? COLOR_OPTIONS[9];
 }
 
-function getEmoji(label: string): string {
-  const match = label.match(/^\p{Emoji}/u);
-  return match ? match[0] : "📊";
-}
 
-function getCleanLabel(label: string): string {
-  return label.replace(/^\p{Emoji}\s*/u, "");
-}
 
-function getDefaultEmoji(type: string): string {
-  const map: Record<string, string> = {
-    heartrate: "❤️",
-    calories: "🔥",
-    weight: "⚖️",
-    steps: "👟",
-    sleep: "🌙",
-  };
-  return map[type] ?? "📊";
-}
 
 function getDisplayUnit(unit: string): string {
   if (!unit.startsWith("custom||")) return unit;
@@ -272,11 +296,11 @@ export default function StatCard({
   const logEntry = useLogEntry();
   const editCard = useEditCard();
 
-  const isCustom = card.type === "custom";
-  const isWeight = card.type === "weight";
-  const emoji = isCustom ? getEmoji(card.label) : getDefaultEmoji(card.type);
-  const displayLabel = isCustom ? getCleanLabel(card.label) : card.label;
-  const displayUnit = getDisplayUnit(card.unit);
+  const isCustom    = card.type === "custom";
+  const isWeight    = card.type === "weight";
+  const CardIcon    = getCardIcon(card);
+  const displayLabel = getCleanCardLabel(card.label);
+  const displayUnit  = getDisplayUnit(card.unit);
 
   const [localColor, setLocalColor] = useState(
     card.color ?? DEFAULT_COLORS[card.type] ?? "yellow"
@@ -334,7 +358,7 @@ export default function StatCard({
 
   const handleSaveEdit = () => {
     const newLabel = isCustom
-      ? `${emoji} ${editLabel.trim()}`
+      ? editLabel.trim()
       : editLabel.trim();
 
     const parsedGoalValue =
@@ -408,26 +432,14 @@ export default function StatCard({
             e.stopPropagation();
             onToggleSelect();
           }}
-          className={`absolute right-16 top-3 h-5 w-5 rounded-full border transition-all ${
+          className={`absolute right-16 top-2.5 flex h-6 w-6 items-center justify-center rounded-full border transition-all ${
             selected
               ? "border-[#FFD300] bg-[#FFD300]"
               : "border-subtle bg-surface/70 hover:border-strong"
           }`}
         >
           {selected && (
-            <svg
-              className="mx-auto h-3 w-3 text-[#0f0f13]"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={3}
-                d="M5 13l4 4L19 7"
-              />
-            </svg>
+            <IoCheckmarkOutline className="h-3.5 w-3.5 text-[#0f0f13]" />
           )}
         </button>
 
@@ -436,10 +448,10 @@ export default function StatCard({
             e.stopPropagation();
             openEdit();
           }}
-          className="absolute right-9 top-3 text-sm leading-none text-muted opacity-0 transition-all group-hover:opacity-100 hover:text-[#FFD300]"
+          className="absolute right-9 top-2.5 flex h-6 w-6 items-center justify-center text-muted opacity-0 transition-all group-hover:opacity-100 hover:text-[#FFD300]"
           title="Bearbeiten"
         >
-          ✎
+          <IoPencilOutline className="h-3.5 w-3.5" />
         </button>
 
         <button
@@ -447,14 +459,14 @@ export default function StatCard({
             e.stopPropagation();
             setConfirmRemove(true);
           }}
-          className="absolute right-3 top-3 h-5 w-5 text-muted opacity-0 transition-all group-hover:opacity-100 hover:text-red-500 dark:hover:text-red-400"
+          className="absolute right-2.5 top-2.5 flex h-6 w-6 items-center justify-center text-muted opacity-0 transition-all group-hover:opacity-100 hover:text-red-500 dark:hover:text-red-400"
           title="Entfernen"
         >
-          ✕
+          <IoCloseOutline className="h-3.5 w-3.5" />
         </button>
 
         <div className="flex items-start gap-3">
-          <span className="text-2xl">{emoji}</span>
+          <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl border border-subtle bg-surface/50"><CardIcon className="h-5 w-5 text-secondary" /></div>
 
           <div className="min-w-0 flex-1">
             <p className="truncate text-xs uppercase tracking-wider text-muted">
@@ -706,7 +718,7 @@ export default function StatCard({
             <div
               className={`mb-5 flex items-center gap-2 rounded-xl border bg-gradient-to-br p-3 ${previewColor.from} ${previewColor.border}`}
             >
-              <span className="text-lg">{emoji}</span>
+              <CardIcon className="h-5 w-5 text-secondary" />
               <span className="text-sm font-medium text-primary">
                 {editLabel || localLabel}
               </span>
