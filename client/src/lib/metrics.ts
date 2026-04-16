@@ -1,5 +1,3 @@
-// src/lib/metrics.ts
-
 export type BetterDirection = "higher" | "lower";
 export type GoalMode = "at_least" | "at_most";
 
@@ -23,38 +21,11 @@ export type MetricEntryLike = {
 };
 
 export type MetricDefinition = {
-  /**
-   * Stable internal metric key.
-   */
   key: string;
-
-  /**
-   * If true, bigger numeric values should render visually higher on chart
-   * by transforming them against the current visible range.
-   * Useful for pace and other "lower is better" metrics.
-   */
   invertYAxis: boolean;
-
-  /**
-   * Semantic interpretation of improvement.
-   */
   betterDirection: BetterDirection;
-
-  /**
-   * Default decimals for UI output and comparisons.
-   */
   decimals: number;
-
-  /**
-   * Fallback goal mode if card.goalDirection is absent.
-   */
   defaultGoalMode?: GoalMode;
-
-  /**
-   * Converts an entry into the effective metric value.
-   * For normal metrics this is usually entry.value.
-   * For pace/speed it may use both value and secondaryValue.
-   */
   deriveValue?: (entry: MetricEntryLike) => number | null;
 };
 
@@ -90,7 +61,7 @@ export const METRIC_DEFINITIONS: Record<string, MetricDefinition> = {
   heartrate: {
     key: "heartrate",
     betterDirection: "lower",
-    invertYAxis: true,
+    invertYAxis: false,
     decimals: 0,
     defaultGoalMode: "at_most",
   },
@@ -106,7 +77,7 @@ export const METRIC_DEFINITIONS: Record<string, MetricDefinition> = {
   weight: {
     key: "weight",
     betterDirection: "lower",
-    invertYAxis: true,
+    invertYAxis: false,
     decimals: 1,
     defaultGoalMode: "at_most",
   },
@@ -130,7 +101,7 @@ export const METRIC_DEFINITIONS: Record<string, MetricDefinition> = {
   pace: {
     key: "pace",
     betterDirection: "lower",
-    invertYAxis: true,
+    invertYAxis: false,
     decimals: 2,
     defaultGoalMode: "at_most",
     deriveValue: (entry) => {
@@ -215,16 +186,30 @@ export function resolveMetricDefinition(
   return METRIC_DEFINITIONS.custom;
 }
 
+/**
+ * Wichtig:
+ * - gain / lose bleiben eindeutig
+ * - min / max werden anhand der Metrik-Semantik interpretiert
+ *
+ * Beispiel:
+ * - Schritte + min => at_least
+ * - Pace + min => at_most
+ */
 export function resolveGoalMode(card?: MetricCardLike | null): GoalMode {
   const metric = resolveMetricDefinition(card);
 
   switch (card?.goalDirection) {
     case "gain":
-    case "min":
       return "at_least";
     case "lose":
-    case "max":
       return "at_most";
+
+    case "min":
+      return metric.betterDirection === "lower" ? "at_most" : "at_least";
+
+    case "max":
+      return metric.betterDirection === "lower" ? "at_least" : "at_most";
+
     default:
       return (
         metric.defaultGoalMode ??
@@ -411,6 +396,11 @@ export function getGoalStats(params: {
   };
 }
 
+/**
+ * direction = numerische Richtung
+ * performance = gut/schlecht laut Metrik
+ * label = numerische Richtung
+ */
 export function getTrend(params: {
   first: number | null | undefined;
   last: number | null | undefined;
@@ -448,7 +438,7 @@ export function getTrend(params: {
   const improved = betterDirection === "lower" ? delta < 0 : delta > 0;
 
   return {
-    label: improved ? "Steigend" : "Fallend",
+    label: direction === "up" ? "Steigend" : "Fallend",
     delta,
     direction,
     performance: improved ? "better" : "worse",
@@ -599,9 +589,6 @@ export function movingAverageValues(
   });
 }
 
-/**
- * Backward-friendly alias, falls du im UI schon `movingAverage(...)` benutzt.
- */
 export function movingAverage(
   values: Array<number | null | undefined>,
   windowSize: number,
@@ -610,9 +597,6 @@ export function movingAverage(
   return movingAverageValues(values, windowSize, decimals);
 }
 
-/**
- * Returns min/max range for raw semantic values.
- */
 export function getValueRange(
   values: Array<number | null | undefined>
 ): ChartValueRange {
@@ -623,42 +607,24 @@ export function getValueRange(
 }
 
 /**
- * Transforms a raw metric value for chart rendering.
- *
- * For invertYAxis metrics:
- * - lower raw values become visually higher
- * - higher raw values become visually lower
- *
- * This keeps tooltip/goal/business logic on raw values,
- * while making the chart visually intuitive.
+ * Aktuell absichtlich ohne visuelle Invertierung.
+ * Dadurch bleiben:
+ * - Linie
+ * - Balken
+ * - Y-Achse
+ * - Goal-Line
+ * konsistent.
  */
 export function transformChartValue(params: {
   card: MetricCardLike | null | undefined;
   value: number | null | undefined;
   range?: ChartValueRange | null;
 }): number | null {
-  const { card, value, range } = params;
-  const numericValue = toFiniteNumber(value);
-
+  const numericValue = toFiniteNumber(params.value);
   if (numericValue === null) return null;
-  if (!shouldInvertYAxis(card)) return numericValue;
-
-  const min = toFiniteNumber(range?.min);
-  const max = toFiniteNumber(range?.max);
-
-  if (min === null || max === null) return numericValue;
-  if (min === max) return numericValue;
-
-  return roundNumber(
-    max + min - numericValue,
-    resolveMetricDefinition(card).decimals
-  );
+  return numericValue;
 }
 
-/**
- * For chart goal lines.
- * Uses the same transformation as chart values.
- */
 export function getChartGoalValue(params: {
   card: MetricCardLike | null | undefined;
   goalValue?: number | null | undefined;
@@ -722,10 +688,6 @@ export function buildChartPoints(params: {
   });
 }
 
-/**
- * Convenience helper for components:
- * returns all commonly used metric stats in one place.
- */
 export function getMetricSummary(params: {
   card: MetricCardLike | null | undefined;
   values: Array<number | null | undefined>;

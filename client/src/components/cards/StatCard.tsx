@@ -1,56 +1,153 @@
 import { useState } from "react";
 import {
-  IoAlarmOutline, IoAmericanFootballOutline, IoBandageOutline,
-  IoBarbellOutline, IoBasketballOutline, IoBedOutline, IoBeerOutline,
-  IoBicycleOutline, IoBoatOutline, IoBodyOutline, IoBonfireOutline,
-  IoBuildOutline, IoCloseOutline, IoCompassOutline, IoCreateOutline,
-  IoDiceOutline, IoEarthOutline, IoEyedropOutline, IoFishOutline,
-  IoFitnessOutline, IoFlagOutline, IoFlameOutline, IoFlashOutline,
-  IoFlowerOutline, IoFootballOutline, IoFootstepsOutline,
-  IoGameControllerOutline, IoGlobeOutline, IoGolfOutline, IoGridOutline,
-  IoHeartOutline, IoIceCreamOutline, IoInfiniteOutline, IoLeafOutline,
-  IoLocationOutline, IoMapOutline, IoMedalOutline, IoMedicalOutline,
-  IoMoonOutline, IoNutritionOutline, IoPawOutline, IoPulseOutline,
-  IoRibbonOutline, IoRocketOutline, IoRoseOutline, IoScaleOutline,
-  IoSnowOutline, IoSpeedometerOutline, IoStarOutline, IoStopwatchOutline,
-  IoSunnyOutline, IoTennisballOutline, IoThermometerOutline,
-  IoThumbsDownOutline, IoThumbsUpOutline, IoTimerOutline,
-  IoTrendingDownOutline, IoTrendingUpOutline, IoTrophyOutline,
-  IoWalkOutline, IoWaterOutline,
-  IoPencilOutline, IoCheckmarkOutline, IoOpenOutline, IoTrashOutline,
-  IoRemoveOutline, IoAddOutline,
+  IoAlarmOutline,
+  IoAmericanFootballOutline,
+  IoBandageOutline,
+  IoBarbellOutline,
+  IoBasketballOutline,
+  IoBedOutline,
+  IoBeerOutline,
+  IoBicycleOutline,
+  IoBoatOutline,
+  IoBodyOutline,
+  IoBonfireOutline,
+  IoBuildOutline,
+  IoCloseOutline,
+  IoCompassOutline,
+  IoCreateOutline,
+  IoDiceOutline,
+  IoEarthOutline,
+  IoEyedropOutline,
+  IoFishOutline,
+  IoFitnessOutline,
+  IoFlagOutline,
+  IoFlameOutline,
+  IoFlashOutline,
+  IoFlowerOutline,
+  IoFootballOutline,
+  IoFootstepsOutline,
+  IoGameControllerOutline,
+  IoGlobeOutline,
+  IoGolfOutline,
+  IoGridOutline,
+  IoHeartOutline,
+  IoIceCreamOutline,
+  IoInfiniteOutline,
+  IoLeafOutline,
+  IoLocationOutline,
+  IoMapOutline,
+  IoMedalOutline,
+  IoMedicalOutline,
+  IoMoonOutline,
+  IoNutritionOutline,
+  IoPawOutline,
+  IoPulseOutline,
+  IoRibbonOutline,
+  IoRocketOutline,
+  IoRoseOutline,
+  IoScaleOutline,
+  IoSnowOutline,
+  IoSpeedometerOutline,
+  IoStarOutline,
+  IoStopwatchOutline,
+  IoSunnyOutline,
+  IoTennisballOutline,
+  IoThermometerOutline,
+  IoThumbsDownOutline,
+  IoThumbsUpOutline,
+  IoTimerOutline,
+  IoTrendingDownOutline,
+  IoTrendingUpOutline,
+  IoTrophyOutline,
+  IoWalkOutline,
+  IoWaterOutline,
+  IoPencilOutline,
+  IoCheckmarkOutline,
+  IoTrashOutline,
 } from "react-icons/io5";
 import type { ComponentType } from "react";
+import {
+  useUpdateWeight,
+  useRemoveCard,
+  useLogEntry,
+  useEditCard,
+} from "../../hooks/useStats";
+import CustomCardTable from "./CustomCardTable";
 
 const ICON_MAP: Record<string, ComponentType<{ className?: string }>> = {
-  // All keys from AddCardModal
-  walk: IoWalkOutline, bicycle: IoBicycleOutline, barbell: IoBarbellOutline,
-  fitness: IoFitnessOutline, football: IoFootballOutline, basketball: IoBasketballOutline,
-  tennisball: IoTennisballOutline, americanfb: IoAmericanFootballOutline,
-  golf: IoGolfOutline, boat: IoBoatOutline, stopwatch: IoStopwatchOutline,
-  timer: IoTimerOutline, compass: IoCompassOutline, flag: IoFlagOutline,
-  trophy: IoTrophyOutline, medal: IoMedalOutline, ribbon: IoRibbonOutline,
-  heart: IoHeartOutline, pulse: IoPulseOutline, body: IoBodyOutline,
-  footsteps: IoFootstepsOutline, bandage: IoBandageOutline, medical: IoMedicalOutline,
-  nutrition: IoNutritionOutline, scale: IoScaleOutline, thermometer: IoThermometerOutline,
-  eyedrop: IoEyedropOutline, flame: IoFlameOutline, moon: IoMoonOutline,
-  bed: IoBedOutline, water: IoWaterOutline, leaf: IoLeafOutline,
-  flower: IoFlowerOutline, sun: IoSunnyOutline, snow: IoSnowOutline,
-  earth: IoEarthOutline, bonfire: IoBonfireOutline, trending: IoTrendingUpOutline,
-  trenddown: IoTrendingDownOutline, speedo: IoSpeedometerOutline, star: IoStarOutline,
-  flash: IoFlashOutline, rocket: IoRocketOutline, infinite: IoInfiniteOutline,
-  alarm: IoAlarmOutline, thumbup: IoThumbsUpOutline, thumbdown: IoThumbsDownOutline,
-  grid: IoGridOutline, map: IoMapOutline, globe: IoGlobeOutline,
-  location: IoLocationOutline, create: IoCreateOutline, build: IoBuildOutline,
-  paw: IoPawOutline, fish: IoFishOutline, rose: IoRoseOutline,
-  dice: IoDiceOutline, game: IoGameControllerOutline, beer: IoBeerOutline,
+  walk: IoWalkOutline,
+  bicycle: IoBicycleOutline,
+  barbell: IoBarbellOutline,
+  fitness: IoFitnessOutline,
+  football: IoFootballOutline,
+  basketball: IoBasketballOutline,
+  tennisball: IoTennisballOutline,
+  americanfb: IoAmericanFootballOutline,
+  golf: IoGolfOutline,
+  boat: IoBoatOutline,
+  stopwatch: IoStopwatchOutline,
+  timer: IoTimerOutline,
+  compass: IoCompassOutline,
+  flag: IoFlagOutline,
+  trophy: IoTrophyOutline,
+  medal: IoMedalOutline,
+  ribbon: IoRibbonOutline,
+  heart: IoHeartOutline,
+  pulse: IoPulseOutline,
+  body: IoBodyOutline,
+  footsteps: IoFootstepsOutline,
+  bandage: IoBandageOutline,
+  medical: IoMedicalOutline,
+  nutrition: IoNutritionOutline,
+  scale: IoScaleOutline,
+  thermometer: IoThermometerOutline,
+  eyedrop: IoEyedropOutline,
+  flame: IoFlameOutline,
+  moon: IoMoonOutline,
+  bed: IoBedOutline,
+  water: IoWaterOutline,
+  leaf: IoLeafOutline,
+  flower: IoFlowerOutline,
+  sun: IoSunnyOutline,
+  snow: IoSnowOutline,
+  earth: IoEarthOutline,
+  bonfire: IoBonfireOutline,
+  trending: IoTrendingUpOutline,
+  trenddown: IoTrendingDownOutline,
+  speedo: IoSpeedometerOutline,
+  star: IoStarOutline,
+  flash: IoFlashOutline,
+  rocket: IoRocketOutline,
+  infinite: IoInfiniteOutline,
+  alarm: IoAlarmOutline,
+  thumbup: IoThumbsUpOutline,
+  thumbdown: IoThumbsDownOutline,
+  grid: IoGridOutline,
+  map: IoMapOutline,
+  globe: IoGlobeOutline,
+  location: IoLocationOutline,
+  create: IoCreateOutline,
+  build: IoBuildOutline,
+  paw: IoPawOutline,
+  fish: IoFishOutline,
+  rose: IoRoseOutline,
+  dice: IoDiceOutline,
+  game: IoGameControllerOutline,
+  beer: IoBeerOutline,
   icecream: IoIceCreamOutline,
-  // Built-in card types
-  heartrate: IoHeartOutline, calories: IoFlameOutline, weight: IoScaleOutline,
-  steps: IoFootstepsOutline, sleep: IoMoonOutline, custom: IoGridOutline,
+  heartrate: IoHeartOutline,
+  calories: IoFlameOutline,
+  weight: IoScaleOutline,
+  steps: IoFootstepsOutline,
+  sleep: IoMoonOutline,
+  custom: IoGridOutline,
 };
 
-const ICON_LIST: { key: string; label: string; Icon: ComponentType<{ className?: string }> }[] = [
+const ICON_LIST: {
+  key: string;
+  label: string;
+  Icon: ComponentType<{ className?: string }>;
+}[] = [
   { key: "walk", label: "Gehen", Icon: IoWalkOutline },
   { key: "bicycle", label: "Fahrrad", Icon: IoBicycleOutline },
   { key: "barbell", label: "Gewichte", Icon: IoBarbellOutline },
@@ -112,25 +209,6 @@ const ICON_LIST: { key: string; label: string; Icon: ComponentType<{ className?:
   { key: "beer", label: "Bier", Icon: IoBeerOutline },
   { key: "icecream", label: "Eis", Icon: IoIceCreamOutline },
 ];
-
-function getCardIcon(card: { type: string; label: string }): ComponentType<{ className?: string }> {
-  // Check for [iconKey] prefix from AddCardModal
-  const match = card.label.match(/^\[([a-z]+)\]/);
-  if (match && ICON_MAP[match[1]]) return ICON_MAP[match[1]];
-  // Fall back to type
-  return ICON_MAP[card.type] ?? IoGridOutline;
-}
-
-function getCleanCardLabel(label: string): string {
-  return label.replace(/^\[[a-z]+\]\s*/, '').replace(/^\p{Emoji}\s*/u, '');
-}
-import {
-  useUpdateWeight,
-  useRemoveCard,
-  useLogEntry,
-  useEditCard,
-} from "../../hooks/useStats";
-import CustomCardTable from "./CustomCardTable";
 
 interface Props {
   card: {
@@ -211,7 +289,7 @@ const COLOR_OPTIONS = [
     border: "border-[#FFD300]/20",
     dot: "bg-[#FFD300]",
   },
-];
+] as const;
 
 const CHART_TYPES = [
   {
@@ -324,7 +402,7 @@ const CHART_TYPES = [
       </svg>
     ),
   },
-];
+] as const;
 
 const DEFAULT_COLORS: Record<string, string> = {
   heartrate: "rose",
@@ -335,12 +413,22 @@ const DEFAULT_COLORS: Record<string, string> = {
   custom: "yellow",
 };
 
+function getCardIcon(card: {
+  type: string;
+  label: string;
+}): ComponentType<{ className?: string }> {
+  const match = card.label.match(/^\[([a-z]+)\]/);
+  if (match && ICON_MAP[match[1]]) return ICON_MAP[match[1]];
+  return ICON_MAP[card.type] ?? IoGridOutline;
+}
+
+function getCleanCardLabel(label: string): string {
+  return label.replace(/^\[[a-z]+\]\s*/, "").replace(/^\p{Emoji}\s*/u, "");
+}
+
 function getColorClasses(key: string) {
   return COLOR_OPTIONS.find((o) => o.key === key) ?? COLOR_OPTIONS[9];
 }
-
-
-
 
 function getDisplayUnit(unit: string): string {
   if (!unit.startsWith("custom||")) return unit;
@@ -359,10 +447,12 @@ function getDisplayValue(
   unit: string,
   secondaryValue?: number
 ): string {
-  if (unit === "min/km" && secondaryValue && value)
+  if (unit === "min/km" && secondaryValue && value) {
     return (secondaryValue / value).toFixed(2);
-  if (unit === "km/h" && secondaryValue && value)
+  }
+  if (unit === "km/h" && secondaryValue && value) {
     return (value / (secondaryValue / 60)).toFixed(1);
+  }
   const num = parseFloat(String(value));
   if (isNaN(num)) return "—";
   return parseFloat(num.toFixed(2)).toString();
@@ -380,11 +470,11 @@ export default function StatCard({
   const logEntry = useLogEntry();
   const editCard = useEditCard();
 
-  const isCustom    = card.type === "custom";
-  const isWeight    = card.type === "weight";
-  const CardIcon    = getCardIcon(card);
+  const isCustom = card.type === "custom";
+  const isWeight = card.type === "weight";
+  const CardIcon = getCardIcon(card);
   const displayLabel = getCleanCardLabel(card.label);
-  const displayUnit  = getDisplayUnit(card.unit);
+  const displayUnit = getDisplayUnit(card.unit);
 
   const [localColor, setLocalColor] = useState(
     card.color ?? DEFAULT_COLORS[card.type] ?? "yellow"
@@ -435,7 +525,10 @@ export default function StatCard({
   const openEdit = () => {
     setEditLabel(localLabel);
     setEditColor(localColor);
-    setEditIconKey(() => { const m = card.label.match(/^\[([a-z]+)\]/); return m ? m[1] : ""; });
+    setEditIconKey(() => {
+      const m = card.label.match(/^\[([a-z]+)\]/);
+      return m ? m[1] : "";
+    });
     setEditChartType(localChartType);
     setEditGoalEnabled(localGoalEnabled);
     setEditGoalValue(
@@ -448,9 +541,10 @@ export default function StatCard({
   };
 
   const handleSaveEdit = () => {
-    const newLabel = isCustom && editIconKey
-      ? `[${editIconKey}] ${editLabel.trim()}`
-      : editLabel.trim();
+    const newLabel =
+      isCustom && editIconKey
+        ? `[${editIconKey}] ${editLabel.trim()}`
+        : editLabel.trim();
 
     const parsedGoalValue =
       editGoalEnabled && editGoalValue.trim() !== ""
@@ -511,179 +605,214 @@ export default function StatCard({
   return (
     <>
       <div
-        className={`relative group rounded-2xl border bg-gradient-to-br ${
+        className={`group relative flex min-h-[214px] flex-col overflow-hidden rounded-2xl border bg-gradient-to-br ${
           colorOption.from
         } ${colorOption.border} p-4 transition-all ${
           selected ? "ring-2 ring-[#FFD300]/50" : ""
         } ${isCustom ? "cursor-pointer" : ""}`}
         onClick={isCustom ? () => setShowTable(true) : undefined}
       >
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onToggleSelect();
-          }}
-          className={`absolute right-16 top-2.5 flex h-6 w-6 items-center justify-center rounded-full border transition-all ${
-            selected
-              ? "border-[#FFD300] bg-[#FFD300]"
-              : "border-subtle bg-surface/70 hover:border-strong"
-          }`}
-        >
-          {selected && (
-            <IoCheckmarkOutline className="h-3.5 w-3.5 text-[#0f0f13]" />
-          )}
-        </button>
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-16 bg-gradient-to-b from-white/4 to-transparent dark:from-white/[0.03]" />
 
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            openEdit();
-          }}
-          className="absolute right-9 top-2.5 flex h-6 w-6 items-center justify-center text-muted opacity-0 transition-all group-hover:opacity-100 hover:text-[#FFD300]"
-          title="Bearbeiten"
-        >
-          <IoPencilOutline className="h-3.5 w-3.5" />
-        </button>
-
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            setConfirmRemove(true);
-          }}
-          className="absolute right-2.5 top-2.5 flex h-6 w-6 items-center justify-center text-muted opacity-0 transition-all group-hover:opacity-100 hover:text-red-500 dark:hover:text-red-400"
-          title="Entfernen"
-        >
-          <IoCloseOutline className="h-3.5 w-3.5" />
-        </button>
-
-        <div className="flex items-start gap-3">
-          <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl border border-subtle bg-surface/50"><CardIcon className="h-5 w-5 text-secondary" /></div>
-
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-xs uppercase tracking-wider text-muted">
-              {localLabel}
-            </p>
-
-            <p className="mt-0.5 text-2xl font-semibold text-primary">
-              {latest?.value != null
-                ? getDisplayValue(
-                    latest.value,
-                    card.unit,
-                    latest.secondaryValue
-                  )
-                : "—"}
-              <span className="ml-1 text-sm font-normal text-muted">
-                {displayUnit}
-              </span>
-            </p>
-
-            {latest?.recordedAt && (
-              <p className="mt-1 text-xs text-muted">
-                {new Date(latest.recordedAt).toLocaleDateString("de-DE", {
-                  day: "2-digit",
-                  month: "short",
-                })}
-              </p>
+        {/* Top right actions */}
+        <div className="absolute right-3 top-3 z-20 flex flex-col items-end gap-1">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleSelect();
+            }}
+            className={`flex h-7 w-7 items-center justify-center rounded-full border transition-all ${
+              selected
+                ? "border-[#FFD300] bg-[#FFD300]"
+                : "border-subtle bg-surface/70 hover:border-strong"
+            }`}
+            title="Im MainChart anzeigen"
+          >
+            {selected && (
+              <IoCheckmarkOutline className="h-4 w-4 text-[#0f0f13]" />
             )}
+          </button>
 
-            {localGoalEnabled && typeof localGoalValue === "number" && (
-              <p className="mt-1 text-[10px] text-[#c99700] dark:text-[#FFD300]/80">
-                Ziel: {localGoalValue} {displayUnit}
-              </p>
-            )}
+          <div className="flex flex-col items-center gap-1 pt-0.5 opacity-0 translate-y-1 transition-all duration-200 group-hover:translate-y-0 group-hover:opacity-100">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                openEdit();
+              }}
+              className="flex h-7 w-7 items-center justify-center rounded-full border border-subtle bg-surface/70 text-muted transition-all hover:border-strong hover:text-[#FFD300]"
+              title="Bearbeiten"
+            >
+              <IoPencilOutline className="h-4 w-4" />
+            </button>
+
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setConfirmRemove(true);
+              }}
+              className="flex h-7 w-7 items-center justify-center rounded-full border border-subtle bg-surface/70 text-muted transition-all hover:border-red-500/40 hover:text-red-500 dark:hover:text-red-400"
+              title="Entfernen"
+            >
+              <IoTrashOutline className="h-4 w-4" />
+            </button>
           </div>
         </div>
 
-        {isCustom && (
-          <div className="mt-2 border-t border-subtle pt-2">
-            <p className="text-xs text-[#c99700] dark:text-[#FFD300]/70">
-              Tippen zum Öffnen →
-            </p>
-          </div>
-        )}
-
-        {isWeight && (
-          <div className="mt-3 space-y-2 border-t border-subtle pt-3">
-            <div className="flex items-center gap-2">
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleDelta(-0.1);
-                }}
-                disabled={updateWeight.isPending}
-                className="flex-1 rounded-lg border border-subtle bg-surface px-0 py-1.5 text-sm font-medium text-primary transition-colors hover:border-strong hover:bg-surface-2 disabled:opacity-50"
-              >
-                − 0.1
-              </button>
-
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleDelta(0.1);
-                }}
-                disabled={updateWeight.isPending}
-                className="flex-1 rounded-lg border border-subtle bg-surface px-0 py-1.5 text-sm font-medium text-primary transition-colors hover:border-strong hover:bg-surface-2 disabled:opacity-50"
-              >
-                + 0.1
-              </button>
-
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setShowWeightInput(!showWeightInput);
-                }}
-                className={`rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-all ${
-                  showWeightInput
-                    ? "border-[#FFD300] bg-[#FFD300] text-[#0f0f13]"
-                    : "border-subtle bg-surface text-secondary hover:border-strong"
-                }`}
-              >
-                ✏️
-              </button>
+        {/* Main card body */}
+        <div className="relative flex flex-1 flex-col">
+          {/* Header left */}
+          <div className="flex items-start gap-3 pr-12">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center">
+              <CardIcon className="h-8 w-8 text-primary/90" />
             </div>
 
-            {selectedDate && (
-              <p className="text-center text-[10px] text-muted">
-                {selectedDate === new Date().toISOString().split("T")[0]
-                  ? "Heute"
-                  : new Date(selectedDate + "T12:00:00").toLocaleDateString(
-                      "de-DE",
-                      { day: "2-digit", month: "short" }
-                    )}
+            <div className="min-w-0 pt-1">
+              <p className="truncate text-base font-semibold leading-tight text-primary">
+                {localLabel}
               </p>
-            )}
+            </div>
+          </div>
 
-            {showWeightInput && (
-              <div onClick={(e) => e.stopPropagation()} className="space-y-2">
-                <input
-                  type="number"
-                  value={weightInput}
-                  onChange={(e) => setWeightInput(e.target.value)}
-                  placeholder={`${latest?.value ?? "70"} kg`}
-                  step="0.1"
-                  className="w-full rounded-lg border border-subtle bg-surface px-3 py-1.5 text-sm text-primary placeholder:text-muted focus:border-[#FFD300]/50 focus:outline-none"
-                />
+          {/* Center value area */}
+          <div className="flex flex-1 flex-col justify-center py-4">
+            <div className="flex flex-wrap items-end gap-x-2 gap-y-1">
+              <p className="text-[30px] font-semibold leading-none text-primary">
+                {latest?.value != null
+                  ? getDisplayValue(
+                      latest.value,
+                      card.unit,
+                      latest.secondaryValue
+                    )
+                  : "—"}
+              </p>
+              <span className="text-sm font-medium text-muted">
+                {displayUnit}
+              </span>
+            </div>
 
-                <div className="flex gap-2">
-                  <input
-                    type="date"
-                    value={dateInput}
-                    onChange={(e) => setDateInput(e.target.value)}
-                    className="flex-1 rounded-lg border border-subtle bg-surface px-3 py-1.5 text-sm text-primary focus:border-[#FFD300]/50 focus:outline-none"
-                  />
+            <div className="mt-2 min-h-[18px]">
+              {latest?.recordedAt ? (
+                <p className="text-xs text-muted">
+                  {new Date(latest.recordedAt).toLocaleDateString("de-DE", {
+                    day: "2-digit",
+                    month: "short",
+                  })}
+                </p>
+              ) : (
+                <p className="text-xs text-transparent">.</p>
+              )}
+            </div>
+
+            <div className="mt-1 min-h-[16px]">
+              {localGoalEnabled && typeof localGoalValue === "number" ? (
+                <p className="text-[10px] text-[#c99700] dark:text-[#FFD300]/80">
+                  Ziel: {localGoalValue} {displayUnit}
+                </p>
+              ) : (
+                <p className="text-[10px] text-transparent">.</p>
+              )}
+            </div>
+          </div>
+
+          {/* Bottom area */}
+          {isCustom && (
+            <div className="mt-auto border-t border-subtle pt-3">
+              <p className="text-xs text-[#c99700] dark:text-[#FFD300]/70">
+                Tippen zum Öffnen →
+              </p>
+            </div>
+          )}
+
+          {isWeight && (
+            <div className="mt-auto border-t border-subtle pt-3">
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDelta(-0.1);
+                    }}
+                    disabled={updateWeight.isPending}
+                    className="flex-1 rounded-lg border border-subtle bg-surface px-0 py-1.5 text-sm font-medium text-primary transition-colors hover:border-strong hover:bg-surface-2 disabled:opacity-50"
+                  >
+                    − 0.1
+                  </button>
 
                   <button
-                    onClick={handleManualWeight}
-                    disabled={logEntry.isPending || !weightInput}
-                    className="rounded-lg bg-[#FFD300] px-3 py-1.5 text-sm font-medium text-[#0f0f13] transition-colors hover:bg-[#e6be00] disabled:opacity-40"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDelta(0.1);
+                    }}
+                    disabled={updateWeight.isPending}
+                    className="flex-1 rounded-lg border border-subtle bg-surface px-0 py-1.5 text-sm font-medium text-primary transition-colors hover:border-strong hover:bg-surface-2 disabled:opacity-50"
                   >
-                    {logEntry.isPending ? "…" : "OK"}
+                    + 0.1
+                  </button>
+
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setShowWeightInput(!showWeightInput);
+                    }}
+                    className={`rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-all ${
+                      showWeightInput
+                        ? "border-[#FFD300] bg-[#FFD300] text-[#0f0f13]"
+                        : "border-subtle bg-surface text-secondary hover:border-strong"
+                    }`}
+                  >
+                    ✏️
                   </button>
                 </div>
+
+                {selectedDate && (
+                  <p className="text-center text-[10px] text-muted">
+                    {selectedDate === new Date().toISOString().split("T")[0]
+                      ? "Heute"
+                      : new Date(selectedDate + "T12:00:00").toLocaleDateString(
+                          "de-DE",
+                          { day: "2-digit", month: "short" }
+                        )}
+                  </p>
+                )}
+
+                {showWeightInput && (
+                  <div
+                    onClick={(e) => e.stopPropagation()}
+                    className="space-y-2"
+                  >
+                    <input
+                      type="number"
+                      value={weightInput}
+                      onChange={(e) => setWeightInput(e.target.value)}
+                      placeholder={`${latest?.value ?? "70"} kg`}
+                      step="0.1"
+                      className="w-full rounded-lg border border-subtle bg-surface px-3 py-1.5 text-sm text-primary placeholder:text-muted focus:border-[#FFD300]/50 focus:outline-none"
+                    />
+
+                    <div className="flex gap-2">
+                      <input
+                        type="date"
+                        value={dateInput}
+                        onChange={(e) => setDateInput(e.target.value)}
+                        className="flex-1 rounded-lg border border-subtle bg-surface px-3 py-1.5 text-sm text-primary focus:border-[#FFD300]/50 focus:outline-none"
+                      />
+
+                      <button
+                        onClick={handleManualWeight}
+                        disabled={logEntry.isPending || !weightInput}
+                        className="rounded-lg bg-[#FFD300] px-3 py-1.5 text-sm font-medium text-[#0f0f13] transition-colors hover:bg-[#e6be00] disabled:opacity-40"
+                      >
+                        {logEntry.isPending ? "…" : "OK"}
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
-            )}
-          </div>
-        )}
+            </div>
+          )}
+
+          {!isWeight && !isCustom && <div className="mt-auto h-[72px]" />}
+        </div>
       </div>
 
       {showEdit && (
@@ -699,33 +828,64 @@ export default function StatCard({
               </button>
             </div>
 
-            {/* Icon — only shown for custom cards */}
             {isCustom && (
               <div className="mb-4">
-                <label className="mb-1.5 block text-sm text-secondary">Icon</label>
+                <label className="mb-1.5 block text-sm text-secondary">
+                  Icon
+                </label>
                 {(() => {
                   const EditIcon = ICON_MAP[editIconKey] ?? IoGridOutline;
                   const filtered = editIconSearch.trim()
-                    ? ICON_LIST.filter((o) => o.label.toLowerCase().includes(editIconSearch.toLowerCase()) || o.key.includes(editIconSearch.toLowerCase()))
+                    ? ICON_LIST.filter(
+                        (o) =>
+                          o.label
+                            .toLowerCase()
+                            .includes(editIconSearch.toLowerCase()) ||
+                          o.key.includes(editIconSearch.toLowerCase())
+                      )
                     : ICON_LIST;
+
                   return (
                     <>
-                      <button onClick={() => setShowEditIconPicker((v) => !v)}
-                        className="flex h-11 w-11 items-center justify-center rounded-xl border border-subtle bg-surface-2 transition-all hover:border-[#FFD300]/50">
+                      <button
+                        onClick={() => setShowEditIconPicker((v) => !v)}
+                        className="flex h-11 w-11 items-center justify-center rounded-xl border border-subtle bg-surface-2 transition-all hover:border-[#FFD300]/50"
+                      >
                         <EditIcon className="h-5 w-5 text-primary" />
                       </button>
+
                       {showEditIconPicker && (
                         <div className="mt-2 rounded-xl border border-subtle bg-surface-2 p-3">
-                          <input value={editIconSearch} onChange={(e) => setEditIconSearch(e.target.value)}
+                          <input
+                            value={editIconSearch}
+                            onChange={(e) => setEditIconSearch(e.target.value)}
                             placeholder="Suchen…"
-                            className="mb-2 w-full rounded-lg border border-subtle bg-surface px-3 py-1.5 text-sm text-primary placeholder:text-muted focus:border-[#FFD300]/50 focus:outline-none" />
-                          <div className="grid grid-cols-8 gap-1 max-h-40 overflow-y-auto">
+                            className="mb-2 w-full rounded-lg border border-subtle bg-surface px-3 py-1.5 text-sm text-primary placeholder:text-muted focus:border-[#FFD300]/50 focus:outline-none"
+                          />
+
+                          <div className="grid max-h-40 grid-cols-8 gap-1 overflow-y-auto">
                             {filtered.map(({ key, label: iconLabel, Icon }) => (
-                              <button key={key}
-                                onClick={() => { setEditIconKey(key); setShowEditIconPicker(false); setEditIconSearch(""); }}
+                              <button
+                                key={key}
+                                onClick={() => {
+                                  setEditIconKey(key);
+                                  setShowEditIconPicker(false);
+                                  setEditIconSearch("");
+                                }}
                                 title={iconLabel}
-                                className={`flex items-center justify-center rounded-lg p-2 transition-all hover:bg-surface-3 ${editIconKey === key ? "bg-[#FFD300]/20 ring-1 ring-[#FFD300]/40" : ""}`}>
-                                <Icon className={`h-4 w-4 ${editIconKey === key ? "text-[#FFD300]" : "text-secondary"}`} />
+                                className={`flex items-center justify-center rounded-lg p-2 transition-all hover:bg-surface-3 ${
+                                  editIconKey === key
+                                    ? "bg-[#FFD300]/20 ring-1 ring-[#FFD300]/40"
+                                    : ""
+                                }`}
+                              >
+                                <Icon
+                                  className={`h-4 w-4 ${
+                                    editIconKey === key
+                                      ? "text-[#FFD300]"
+                                      : "text-secondary"
+                                  }`}
+                                />
                               </button>
                             ))}
                           </div>
@@ -744,7 +904,7 @@ export default function StatCard({
               <input
                 value={editLabel}
                 onChange={(e) => setEditLabel(e.target.value)}
-                className="w-full rounded-xl border border-subtle bg-surface-2 px-4 py-2.5 text-sm text-primary focus:border-[#FFD300]/50 focus:outline-none transition-all"
+                className="w-full rounded-xl border border-subtle bg-surface-2 px-4 py-2.5 text-sm text-primary transition-all focus:border-[#FFD300]/50 focus:outline-none"
               />
             </div>
 
