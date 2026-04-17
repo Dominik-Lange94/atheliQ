@@ -231,63 +231,83 @@ interface Props {
 const COLOR_OPTIONS = [
   {
     key: "rose",
-    from: "from-rose-500/10",
+    from: "from-rose-500/12",
     border: "border-rose-500/20",
     dot: "bg-rose-400",
+    iconBg: "bg-rose-500/18 dark:bg-rose-500/16",
+    iconText: "!text-[#0f0f13] dark:!text-rose-200",
   },
   {
     key: "orange",
-    from: "from-orange-500/10",
+    from: "from-orange-500/12",
     border: "border-orange-500/20",
     dot: "bg-orange-400",
+    iconBg: "bg-orange-500/18 dark:bg-orange-500/16",
+    iconText: "!text-[#0f0f13] dark:!text-orange-200",
   },
   {
     key: "amber",
-    from: "from-amber-500/10",
+    from: "from-amber-500/12",
     border: "border-amber-500/20",
     dot: "bg-amber-400",
+    iconBg: "bg-amber-500/18 dark:bg-amber-500/16",
+    iconText: "!text-[#0f0f13] dark:!text-amber-100",
   },
   {
     key: "green",
-    from: "from-green-500/10",
+    from: "from-green-500/12",
     border: "border-green-500/20",
     dot: "bg-green-400",
+    iconBg: "bg-green-500/18 dark:bg-green-500/16",
+    iconText: "!text-[#0f0f13] dark:!text-green-200",
   },
   {
     key: "teal",
-    from: "from-teal-500/10",
+    from: "from-teal-500/12",
     border: "border-teal-500/20",
     dot: "bg-teal-400",
+    iconBg: "bg-teal-500/18 dark:bg-teal-500/16",
+    iconText: "!text-[#0f0f13] dark:!text-teal-200",
   },
   {
     key: "blue",
-    from: "from-blue-500/10",
+    from: "from-blue-500/12",
     border: "border-blue-500/20",
     dot: "bg-blue-400",
+    iconBg: "bg-blue-500/18 dark:bg-blue-500/16",
+    iconText: "!text-[#0f0f13] dark:!text-blue-200",
   },
   {
     key: "indigo",
-    from: "from-indigo-500/10",
+    from: "from-indigo-500/12",
     border: "border-indigo-500/20",
     dot: "bg-indigo-400",
+    iconBg: "bg-indigo-500/18 dark:bg-indigo-500/16",
+    iconText: "!text-[#0f0f13] dark:!text-indigo-200",
   },
   {
     key: "purple",
-    from: "from-purple-500/10",
+    from: "from-purple-500/12",
     border: "border-purple-500/20",
     dot: "bg-purple-400",
+    iconBg: "bg-purple-500/18 dark:bg-purple-500/16",
+    iconText: "!text-[#0f0f13] dark:!text-purple-200",
   },
   {
     key: "pink",
-    from: "from-pink-500/10",
+    from: "from-pink-500/12",
     border: "border-pink-500/20",
     dot: "bg-pink-400",
+    iconBg: "bg-pink-500/18 dark:bg-pink-500/16",
+    iconText: "!text-[#0f0f13] dark:!text-pink-200",
   },
   {
     key: "yellow",
-    from: "from-[#FFD300]/10",
+    from: "from-[#FFD300]/12",
     border: "border-[#FFD300]/20",
     dot: "bg-[#FFD300]",
+    iconBg: "bg-[#FFD300]/18 dark:bg-[#FFD300]/16",
+    iconText: "!text-[#0f0f13] dark:!text-[#FFE666]",
   },
 ] as const;
 
@@ -601,20 +621,30 @@ export default function StatCard({
   };
 
   const previewColor = getColorClasses(editColor);
+  const PreviewIcon = isCustom
+    ? ICON_MAP[editIconKey] ?? IoGridOutline
+    : CardIcon;
 
   return (
     <>
       <div
-        className={`group relative flex min-h-[214px] flex-col overflow-hidden rounded-2xl border bg-gradient-to-br ${
+        className={`group relative flex min-h-[214px] flex-col overflow-hidden rounded-[22px] border bg-gradient-to-br ${
           colorOption.from
-        } ${colorOption.border} p-4 transition-all ${
+        } ${colorOption.border} p-4 transition-all duration-200 ${
           selected ? "ring-2 ring-[#FFD300]/50" : ""
-        } ${isCustom ? "cursor-pointer" : ""}`}
-        onClick={isCustom ? () => setShowTable(true) : undefined}
+        } ${
+          isCustom || isWeight ? "cursor-pointer" : ""
+        } hover:-translate-y-[1px] hover:shadow-[0_4px_8px_rgba(0,0,0,0.12)]`}
+        onClick={
+          isCustom
+            ? () => setShowTable(true)
+            : isWeight
+            ? () => setShowWeightInput(true)
+            : undefined
+        }
       >
         <div className="pointer-events-none absolute inset-x-0 top-0 h-16 bg-gradient-to-b from-white/4 to-transparent dark:from-white/[0.03]" />
 
-        {/* Top right actions */}
         <div className="absolute right-3 top-3 z-20 flex flex-col items-end gap-1">
           <button
             onClick={(e) => {
@@ -633,7 +663,7 @@ export default function StatCard({
             )}
           </button>
 
-          <div className="flex flex-col items-center gap-1 pt-0.5 opacity-0 translate-y-1 transition-all duration-200 group-hover:translate-y-0 group-hover:opacity-100">
+          <div className="translate-y-1 flex flex-col items-center gap-1 pt-0.5 opacity-0 transition-all duration-200 group-hover:translate-y-0 group-hover:opacity-100">
             <button
               onClick={(e) => {
                 e.stopPropagation();
@@ -658,25 +688,26 @@ export default function StatCard({
           </div>
         </div>
 
-        {/* Main card body */}
         <div className="relative flex flex-1 flex-col">
-          {/* Header left */}
-          <div className="flex items-start gap-3 pr-12">
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center">
-              <CardIcon className="h-8 w-8 text-primary/90" />
+          <div className="flex items-center gap-3 pr-12">
+            <div
+              className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl ${colorOption.iconBg} backdrop-blur-sm`}
+            >
+              <CardIcon
+                className={`h-[22px] w-[22px] ${colorOption.iconText}`}
+              />
             </div>
 
-            <div className="min-w-0 pt-1">
-              <p className="truncate text-base font-semibold leading-tight text-primary">
+            <div className="min-w-0 flex-1 self-center">
+              <p className="truncate text-[17px] font-semibold leading-none text-primary">
                 {localLabel}
               </p>
             </div>
           </div>
 
-          {/* Center value area */}
-          <div className="flex flex-1 flex-col justify-center py-4">
+          <div className="flex flex-1 flex-col justify-center py-5">
             <div className="flex flex-wrap items-end gap-x-2 gap-y-1">
-              <p className="text-[30px] font-semibold leading-none text-primary">
+              <p className="text-[32px] font-semibold leading-none tracking-[-0.02em] text-primary">
                 {latest?.value != null
                   ? getDisplayValue(
                       latest.value,
@@ -685,7 +716,7 @@ export default function StatCard({
                     )
                   : "—"}
               </p>
-              <span className="text-sm font-medium text-muted">
+              <span className="pb-0.5 text-sm font-medium text-muted">
                 {displayUnit}
               </span>
             </div>
@@ -714,106 +745,104 @@ export default function StatCard({
             </div>
           </div>
 
-          {/* Bottom area */}
-          {isCustom && (
-            <div className="mt-auto border-t border-subtle pt-3">
+          {(isCustom || isWeight) && (
+            <div className="mt-auto border-t border-white/8 pt-3">
               <p className="text-xs text-[#c99700] dark:text-[#FFD300]/70">
                 Tippen zum Öffnen →
               </p>
             </div>
           )}
 
-          {isWeight && (
-            <div className="mt-auto border-t border-subtle pt-3">
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleDelta(-0.1);
-                    }}
-                    disabled={updateWeight.isPending}
-                    className="flex-1 rounded-lg border border-subtle bg-surface px-0 py-1.5 text-sm font-medium text-primary transition-colors hover:border-strong hover:bg-surface-2 disabled:opacity-50"
-                  >
-                    − 0.1
-                  </button>
-
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleDelta(0.1);
-                    }}
-                    disabled={updateWeight.isPending}
-                    className="flex-1 rounded-lg border border-subtle bg-surface px-0 py-1.5 text-sm font-medium text-primary transition-colors hover:border-strong hover:bg-surface-2 disabled:opacity-50"
-                  >
-                    + 0.1
-                  </button>
-
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setShowWeightInput(!showWeightInput);
-                    }}
-                    className={`rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-all ${
-                      showWeightInput
-                        ? "border-[#FFD300] bg-[#FFD300] text-[#0f0f13]"
-                        : "border-subtle bg-surface text-secondary hover:border-strong"
-                    }`}
-                  >
-                    ✏️
-                  </button>
-                </div>
-
-                {selectedDate && (
-                  <p className="text-center text-[10px] text-muted">
-                    {selectedDate === new Date().toISOString().split("T")[0]
-                      ? "Heute"
-                      : new Date(selectedDate + "T12:00:00").toLocaleDateString(
-                          "de-DE",
-                          { day: "2-digit", month: "short" }
-                        )}
-                  </p>
-                )}
-
-                {showWeightInput && (
-                  <div
-                    onClick={(e) => e.stopPropagation()}
-                    className="space-y-2"
-                  >
-                    <input
-                      type="number"
-                      value={weightInput}
-                      onChange={(e) => setWeightInput(e.target.value)}
-                      placeholder={`${latest?.value ?? "70"} kg`}
-                      step="0.1"
-                      className="w-full rounded-lg border border-subtle bg-surface px-3 py-1.5 text-sm text-primary placeholder:text-muted focus:border-[#FFD300]/50 focus:outline-none"
-                    />
-
-                    <div className="flex gap-2">
-                      <input
-                        type="date"
-                        value={dateInput}
-                        onChange={(e) => setDateInput(e.target.value)}
-                        className="flex-1 rounded-lg border border-subtle bg-surface px-3 py-1.5 text-sm text-primary focus:border-[#FFD300]/50 focus:outline-none"
-                      />
-
-                      <button
-                        onClick={handleManualWeight}
-                        disabled={logEntry.isPending || !weightInput}
-                        className="rounded-lg bg-[#FFD300] px-3 py-1.5 text-sm font-medium text-[#0f0f13] transition-colors hover:bg-[#e6be00] disabled:opacity-40"
-                      >
-                        {logEntry.isPending ? "…" : "OK"}
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {!isWeight && !isCustom && <div className="mt-auto h-[72px]" />}
+          {!isWeight && !isCustom && <div className="mt-auto h-[30px]" />}
         </div>
       </div>
+
+      {showWeightInput && isWeight && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-sm rounded-2xl border border-subtle bg-surface p-6"
+          >
+            <div className="mb-5 flex items-center justify-between">
+              <div>
+                <h3 className="font-semibold text-primary">
+                  Gewicht bearbeiten
+                </h3>
+                <p className="mt-1 text-xs text-muted">{localLabel}</p>
+              </div>
+              <button
+                onClick={() => setShowWeightInput(false)}
+                className="flex h-8 w-8 items-center justify-center rounded-lg text-muted transition-colors hover:bg-surface-2 hover:text-primary"
+              >
+                <IoCloseOutline className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  onClick={() => handleDelta(-0.1)}
+                  disabled={updateWeight.isPending}
+                  className="rounded-xl border border-subtle bg-surface-2 py-3 text-sm font-medium text-primary transition-colors hover:border-strong hover:bg-surface disabled:opacity-50"
+                >
+                  − 0.1 kg
+                </button>
+
+                <button
+                  onClick={() => handleDelta(0.1)}
+                  disabled={updateWeight.isPending}
+                  className="rounded-xl border border-subtle bg-surface-2 py-3 text-sm font-medium text-primary transition-colors hover:border-strong hover:bg-surface disabled:opacity-50"
+                >
+                  + 0.1 kg
+                </button>
+              </div>
+
+              {selectedDate && (
+                <p className="text-center text-xs text-muted">
+                  {selectedDate === new Date().toISOString().split("T")[0]
+                    ? "Heute"
+                    : new Date(selectedDate + "T12:00:00").toLocaleDateString(
+                        "de-DE",
+                        { day: "2-digit", month: "short", year: "numeric" }
+                      )}
+                </p>
+              )}
+
+              <div className="space-y-3 rounded-2xl border border-subtle bg-surface-2 p-3">
+                <p className="text-sm font-medium text-primary">
+                  Manuellen Wert eintragen
+                </p>
+
+                <input
+                  type="number"
+                  value={weightInput}
+                  onChange={(e) => setWeightInput(e.target.value)}
+                  placeholder={`${latest?.value ?? "70"} kg`}
+                  step="0.1"
+                  className="w-full rounded-xl border border-subtle bg-surface px-3 py-2.5 text-sm text-primary placeholder:text-muted focus:border-[#FFD300]/50 focus:outline-none"
+                />
+
+                <div className="flex gap-2">
+                  <input
+                    type="date"
+                    value={dateInput}
+                    onChange={(e) => setDateInput(e.target.value)}
+                    className="flex-1 rounded-xl border border-subtle bg-surface px-3 py-2.5 text-sm text-primary focus:border-[#FFD300]/50 focus:outline-none"
+                  />
+
+                  <button
+                    onClick={handleManualWeight}
+                    disabled={logEntry.isPending || !weightInput}
+                    className="rounded-xl bg-[#FFD300] px-4 py-2.5 text-sm font-medium text-[#0f0f13] transition-colors hover:bg-[#e6be00] disabled:opacity-40"
+                  >
+                    {logEntry.isPending ? "…" : "Speichern"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showEdit && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
@@ -1005,12 +1034,18 @@ export default function StatCard({
             </div>
 
             <div
-              className={`mb-5 flex items-center gap-2 rounded-xl border bg-gradient-to-br p-3 ${previewColor.from} ${previewColor.border}`}
+              className={`mb-5 flex items-center gap-3 rounded-2xl border bg-gradient-to-br p-3 ${previewColor.from} ${previewColor.border}`}
             >
-              <CardIcon className="h-5 w-5 text-secondary" />
-              <span className="text-sm font-medium text-primary">
+              <div
+                className={`flex h-10 w-10 items-center justify-center rounded-2xl ${previewColor.iconBg}`}
+              >
+                <PreviewIcon className={`h-5 w-5 ${previewColor.iconText}`} />
+              </div>
+
+              <span className="min-w-0 truncate text-sm font-medium text-primary">
                 {editLabel || localLabel}
               </span>
+
               <span className="ml-auto text-xs text-muted">
                 {CHART_TYPES.find((c) => c.key === editChartType)?.label}
               </span>

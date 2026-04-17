@@ -821,181 +821,113 @@ export default function ChatPage() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-app">
-      <header className="flex shrink-0 items-center justify-between border-b border-subtle px-6 py-4">
-        <div className="flex items-center gap-3">
-          <button
-            onClick={handleBack}
-            className="flex h-10 w-10 items-center justify-center rounded-xl border border-subtle bg-surface text-secondary transition-all hover:border-strong hover:bg-surface-2 hover:text-primary"
-            title="Zurück"
-          >
-            <svg
-              className="h-5 w-5"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={1.7}
-                d="M15 19l-7-7 7-7"
-              />
-            </svg>
-          </button>
+    <div className="min-h-screen flex flex-col">
+      <header className="sticky top-0 z-40 border-b border-subtle bg-app/55 backdrop-blur-xl">
+        <div className="flex items-center justify-between px-5 py-4 sm:px-6 lg:px-8 xl:px-10">
+          {/* LEFT: Logo */}
+          <Link to={user?.role === "coach" ? "/coach" : "/athlete"}>
+            <BrandLogo imageClassName="h-8 w-auto" />
+          </Link>
 
-          <BrandLogo imageClassName="h-8 w-auto" />
-        </div>
-
-        <div className="flex items-center gap-2">
-          <div className="relative" ref={profileMenuRef}>
-            <button
-              onClick={() => setShowProfileMenu((v) => !v)}
-              className="flex h-11 w-11 items-center justify-center rounded-2xl border border-subtle bg-surface transition-all hover:border-strong hover:bg-surface-2"
-              title="Profilmenü"
-            >
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#FFD300] text-sm font-bold text-[#0f0f13]">
-                {getInitials(user?.name)}
-              </div>
-            </button>
-
-            {showProfileMenu && (
-              <div className="absolute right-0 top-full z-50 mt-2 w-64 overflow-hidden rounded-2xl border border-subtle bg-surface shadow-2xl shadow-black/30">
-                <div className="border-b border-subtle px-4 py-4">
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#FFD300] text-sm font-bold text-[#0f0f13]">
-                      {getInitials(user?.name)}
-                    </div>
-                    <div className="min-w-0">
-                      <p className="truncate font-medium text-primary">
-                        {user?.name}
-                      </p>
-                      <p className="truncate text-xs text-muted">
-                        {user?.email}
-                      </p>
-                    </div>
-                  </div>
+          {/* RIGHT: Actions */}
+          <div className="flex items-center gap-3">
+            <div className="relative" ref={profileMenuRef}>
+              <button
+                onClick={() => setShowProfileMenu((v) => !v)}
+                className="flex h-11 w-11 items-center justify-center rounded-2xl border border-subtle bg-surface transition-all hover:border-strong hover:bg-surface-2"
+              >
+                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#FFD300] text-sm font-bold text-[#0f0f13]">
+                  {getInitials(user?.name)}
                 </div>
+              </button>
 
-                <div className="p-2">
-                  {currentUserRole === "athlete" && (
-                    <>
-                      <Link
-                        to="/athlete/settings/profile"
-                        onClick={() => setShowProfileMenu(false)}
-                        className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-secondary transition-all hover:bg-surface-2 hover:text-primary"
-                      >
-                        <svg
-                          className="h-4 w-4"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={1.7}
-                            d="M5.121 17.804A9 9 0 1118.88 17.804M15 11a3 3 0 11-6 0 3 3 0 016 0z"
-                          />
-                        </svg>
-                        Profil
-                      </Link>
-
-                      <button
-                        onClick={() => {
-                          setShowProfileMenu(false);
-                          setShowCoaches(true);
-                        }}
-                        className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-secondary transition-all hover:bg-surface-2 hover:text-primary"
-                      >
-                        <svg
-                          className="h-4 w-4"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={1.6}
-                            d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"
-                          />
-                        </svg>
-                        Coaches
-                      </button>
-
-                      <button
-                        onClick={() => {
-                          setShowProfileMenu(false);
-                          setShowMobileConnect(true);
-                        }}
-                        className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-secondary transition-all hover:bg-surface-2 hover:text-primary"
-                      >
-                        <svg
-                          className="h-4 w-4"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={1.7}
-                            d="M12 18h.01M8 4h8a2 2 0 012 2v12a2 2 0 01-2 2H8a2 2 0 01-2-2V6a2 2 0 012-2z"
-                          />
-                        </svg>
-                        Mobile verbinden
-                      </button>
-
-                      <div className="my-2 h-px bg-[var(--border-subtle)]" />
-                    </>
-                  )}
-
-                  <div className="flex items-center justify-between rounded-xl px-3 py-2.5">
-                    <div className="flex items-center gap-3 text-sm text-secondary">
-                      <svg
-                        className="h-4 w-4"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={1.7}
-                          d="M12 3v1m0 16v1m8.66-10h-1M4.34 12h-1m15.02 6.02l-.7-.7M6.34 6.34l-.7-.7m12.02 0l-.7.7M6.34 17.66l-.7.7M12 7a5 5 0 100 10 5 5 0 000-10z"
-                        />
-                      </svg>
-                      Design
+              {showProfileMenu && (
+                <div className="absolute right-0 top-full z-50 mt-3 w-64 overflow-hidden rounded-2xl border border-white/15 bg-white/70 shadow-[0_30px_80px_rgba(0,0,0,0.35)] backdrop-blur-2xl dark:border-white/10 dark:bg-white/[0.06]">
+                  {/* HEADER */}
+                  <div className="border-b border-white/10 px-4 py-4 dark:border-white/10">
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#FFD300] text-sm font-bold text-[#0f0f13]">
+                        {getInitials(user?.name)}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="truncate font-medium text-primary">
+                          {user?.name}
+                        </p>
+                        <p className="truncate text-xs text-muted">
+                          {user?.email}
+                        </p>
+                      </div>
                     </div>
-
-                    <ThemeToggle />
                   </div>
 
-                  <div className="my-2 h-px bg-[var(--border-subtle)]" />
+                  {/* MENU */}
+                  <div className="p-2">
+                    {currentUserRole === "athlete" && (
+                      <>
+                        <Link
+                          to="/athlete/settings/profile"
+                          onClick={() => setShowProfileMenu(false)}
+                          className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-secondary transition-all hover:bg-white/60 hover:text-primary dark:hover:bg-white/[0.08]"
+                        >
+                          <svg
+                            className="h-4 w-4"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={1.7}
+                              d="M5.121 17.804A9 9 0 1118.88 17.804M15 11a3 3 0 11-6 0 3 3 0 016 0z"
+                            />
+                          </svg>
+                          Profil
+                        </Link>
 
-                  <button
-                    onClick={logout}
-                    className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-rose-500 transition-all hover:bg-rose-500/10"
-                  >
-                    <svg
-                      className="h-4 w-4"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
+                        <button
+                          onClick={() => {
+                            setShowProfileMenu(false);
+                            setShowCoaches(true);
+                          }}
+                          className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-secondary transition-all hover:bg-white/60 hover:text-primary dark:hover:bg-white/[0.08]"
+                        >
+                          Coaches
+                        </button>
+
+                        <button
+                          onClick={() => {
+                            setShowProfileMenu(false);
+                            setShowMobileConnect(true);
+                          }}
+                          className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-secondary transition-all hover:bg-white/60 hover:text-primary dark:hover:bg-white/[0.08]"
+                        >
+                          Mobile verbinden
+                        </button>
+
+                        <div className="my-2 h-px bg-white/10 dark:bg-white/10" />
+                      </>
+                    )}
+
+                    {/* THEME */}
+                    <div className="flex items-center justify-between rounded-xl px-3 py-2.5">
+                      <span className="text-sm text-secondary">Design</span>
+                      <ThemeToggle />
+                    </div>
+
+                    <div className="my-2 h-px bg-white/10 dark:bg-white/10" />
+
+                    {/* LOGOUT */}
+                    <button
+                      onClick={logout}
+                      className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-rose-500 transition-all hover:bg-rose-500/10"
                     >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={1.7}
-                        d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a2 2 0 01-2 2H6a2 2 0 01-2-2V7a2 2 0 012-2h5a2 2 0 012 2v1"
-                      />
-                    </svg>
-                    Abmelden
-                  </button>
+                      Abmelden
+                    </button>
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
           </div>
         </div>
       </header>

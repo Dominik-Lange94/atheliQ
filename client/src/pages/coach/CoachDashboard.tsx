@@ -1062,7 +1062,7 @@ export default function CoachDashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-app">
+    <div className="min-h-screen">
       <header className="flex items-center justify-between border-b border-subtle px-4 py-4 sm:px-6">
         <div className="flex items-center gap-3">
           <BrandLogo imageClassName="h-8 w-auto" />

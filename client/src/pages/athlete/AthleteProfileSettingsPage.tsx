@@ -827,10 +827,16 @@ export default function AthleteProfileSettingsPage() {
 
   return (
     <div className="min-h-screen bg-app">
-      <header className="border-b border-subtle px-6 py-4">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4">
+      <header className="sticky top-0 z-40 border-b border-subtle bg-app/55 backdrop-blur-xl">
+        <div className="flex items-center justify-between px-5 py-4 sm:px-6 lg:px-8 xl:px-10">
           <div className="flex items-center gap-3">
-            <BrandLogo imageClassName="h-8 w-auto" />
+            <Link
+              to="/athlete"
+              className="shrink-0 rounded-xl transition-opacity hover:opacity-85"
+              title="Zum Dashboard"
+            >
+              <BrandLogo imageClassName="h-8 w-auto" />
+            </Link>
           </div>
 
           <div className="flex items-center gap-2">
@@ -853,7 +859,7 @@ export default function AthleteProfileSettingsPage() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
+      <main className="mx-auto max-w-7xl space-y-6 px-4 py-8 sm:px-6">
         <div className="mb-6 grid gap-4 lg:grid-cols-[1fr_320px]">
           <div className="rounded-3xl border border-subtle bg-surface p-6">
             <p className="text-sm text-muted">
