@@ -308,7 +308,7 @@ function AnalyzeMetricCard({
       chartBasePoints.map((point) => ({
         date: point.date,
         dateISO: point.dateISO,
-        value: point.rawValue,
+        value: point.chartValue,
         _real: point.rawValue,
         recordedAt: point.recordedAt,
       })),
@@ -398,7 +398,13 @@ function AnalyzeMetricCard({
       : null;
 
   const goalDisplayValueFullscreen =
-    goalActive && typeof goalValue === "number" ? goalValue : null;
+    goalActive && typeof goalValue === "number"
+      ? getChartGoalValue({
+          card,
+          goalValue,
+          range: valueRange,
+        })
+      : null;
 
   const trendColorClass =
     summary.trend.performance === "better"
@@ -444,15 +450,28 @@ function AnalyzeMetricCard({
             />
 
             <YAxis
-              reversed={isYAxisReversed}
               width={yAxisWidth}
               tick={{ fill: chartUi.tick, fontSize: fullscreen ? 12 : 11 }}
               axisLine={false}
               tickLine={false}
               domain={yDomain}
-              tickFormatter={(value) =>
-                isPaceMetric ? formatPaceValue(Number(value)) : String(value)
-              }
+              tickFormatter={(value) => {
+                if (isPaceMetric) {
+                  const min = valueRange.min;
+                  const max = valueRange.max;
+
+                  if (
+                    typeof min === "number" &&
+                    typeof max === "number" &&
+                    Number.isFinite(min) &&
+                    Number.isFinite(max)
+                  ) {
+                    return formatPaceValue(max + min - Number(value));
+                  }
+                }
+
+                return String(value);
+              }}
             />
 
             <Tooltip

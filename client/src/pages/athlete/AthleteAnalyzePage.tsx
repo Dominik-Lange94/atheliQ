@@ -322,7 +322,7 @@ function AnalyzeMetricCard({
       chartBasePoints.map((point) => ({
         date: point.date,
         dateISO: point.dateISO,
-        value: point.rawValue,
+        value: point.chartValue,
         _real: point.rawValue,
         recordedAt: point.recordedAt,
       })),
@@ -412,7 +412,13 @@ function AnalyzeMetricCard({
       : null;
 
   const goalDisplayValueFullscreen =
-    goalActive && typeof goalValue === "number" ? goalValue : null;
+    goalActive && typeof goalValue === "number"
+      ? getChartGoalValue({
+          card,
+          goalValue,
+          range: valueRange,
+        })
+      : null;
 
   const trendColorClass =
     summary.trend.performance === "better"
@@ -431,7 +437,6 @@ function AnalyzeMetricCard({
     fullscreen?: boolean;
   }) => {
     const isPaceMetric = metricDefinition.key === "pace";
-    const isYAxisReversed = metricDefinition.invertYAxis;
     const yAxisWidth = isPaceMetric ? 76 : 44;
     const chartMarginLeft = 0;
     const yDomain: [string, string] = ["dataMin", "dataMax"];
@@ -463,15 +468,28 @@ function AnalyzeMetricCard({
             />
 
             <YAxis
-              reversed={isYAxisReversed}
               width={yAxisWidth}
               tick={{ fill: chartUi.tick, fontSize: fullscreen ? 12 : 11 }}
               axisLine={false}
               tickLine={false}
               domain={yDomain}
-              tickFormatter={(value) =>
-                isPaceMetric ? formatPaceValue(Number(value)) : String(value)
-              }
+              tickFormatter={(value) => {
+                if (isPaceMetric) {
+                  const min = valueRange.min;
+                  const max = valueRange.max;
+
+                  if (
+                    typeof min === "number" &&
+                    typeof max === "number" &&
+                    Number.isFinite(min) &&
+                    Number.isFinite(max)
+                  ) {
+                    return formatPaceValue(max + min - Number(value));
+                  }
+                }
+
+                return String(value);
+              }}
             />
 
             <Tooltip
@@ -752,8 +770,12 @@ function AnalyzeMetricCard({
                   </p>
                   <p className="mt-1 text-xs text-muted">
                     Zielwert:{" "}
-                    {formatMetricNumber(goalValue, metricDefinition.decimals)}{" "}
-                    {displayUnit}
+                    {formatMetricValue(
+                      goalValue,
+                      metricDefinition.key,
+                      metricDefinition.decimals,
+                      displayUnit
+                    )}
                   </p>
                 </div>
               </div>
@@ -984,8 +1006,12 @@ function AnalyzeMetricCard({
                   </p>
                   <p className="mt-1 text-[10px] font-medium text-[#c99700] dark:text-[#FFD300]">
                     Ziel:{" "}
-                    {formatMetricNumber(goalValue, metricDefinition.decimals)}{" "}
-                    {displayUnit}
+                    {formatMetricValue(
+                      goalValue,
+                      metricDefinition.key,
+                      metricDefinition.decimals,
+                      displayUnit
+                    )}
                   </p>
                 </>
               ) : (
@@ -1097,8 +1123,12 @@ function AnalyzeMetricCard({
                   Durchschnitt
                 </p>
                 <p className="mt-2 text-base font-semibold text-primary">
-                  {formatMetricNumber(summary.avg, metricDefinition.decimals) ??
-                    "—"}
+                  {formatMetricValue(
+                    summary.avg,
+                    metricDefinition.key,
+                    metricDefinition.decimals,
+                    displayUnit
+                  )}
                 </p>
                 <p className="mt-1 text-sm text-muted">{displayUnit}</p>
               </div>
@@ -1108,12 +1138,12 @@ function AnalyzeMetricCard({
                   Letzter Wert
                 </p>
                 <p className="mt-2 text-base font-semibold text-primary">
-                  {typeof latestValue === "number"
-                    ? `${formatMetricNumber(
-                        latestValue,
-                        metricDefinition.decimals
-                      )} ${displayUnit}`
-                    : "—"}
+                  {formatMetricValue(
+                    latestValue,
+                    metricDefinition.key,
+                    metricDefinition.decimals,
+                    displayUnit
+                  )}
                 </p>
                 {goalActive && typeof goalValue === "number" && (
                   <p className="mt-1 text-sm text-[#c99700] dark:text-[#FFD300]">
