@@ -18,6 +18,7 @@ import {
   formatMetricNumber,
   getChartGoalValue,
   getMetricSummary,
+  getValueRange,
   movingAverage,
   resolveGoalMode,
   resolveMetricDefinition,
@@ -227,6 +228,7 @@ export default function MainChart({
   });
 
   const rawValues = chartBasePoints.map((point) => point.rawValue);
+  const valueRange = useMemo(() => getValueRange(rawValues), [rawValues]);
 
   const summary = getMetricSummary({
     card: displayCard,
@@ -299,7 +301,6 @@ export default function MainChart({
       ? "text-rose-500"
       : "text-primary";
 
-  const isYAxisReversed = metricDefinition.invertYAxis;
   const isPaceMetric = metricDefinition.key === "pace";
   const chartMarginLeft = isPaceMetric ? 0 : 0;
   const yAxisWidth = isPaceMetric ? 76 : 40;
@@ -482,15 +483,28 @@ export default function MainChart({
             />
 
             <YAxis
-              reversed={isYAxisReversed}
               width={yAxisWidth}
               tick={{ fill: chartUi.tick, fontSize: 11 }}
               axisLine={false}
               tickLine={false}
               domain={["dataMin", "dataMax"]}
-              tickFormatter={(value) =>
-                isPaceMetric ? formatPaceTick(Number(value)) : String(value)
-              }
+              tickFormatter={(value) => {
+                if (isPaceMetric) {
+                  const min = valueRange.min;
+                  const max = valueRange.max;
+
+                  if (
+                    typeof min === "number" &&
+                    typeof max === "number" &&
+                    Number.isFinite(min) &&
+                    Number.isFinite(max)
+                  ) {
+                    return formatPaceTick(max + min - Number(value));
+                  }
+                }
+
+                return String(value);
+              }}
             />
 
             <Tooltip

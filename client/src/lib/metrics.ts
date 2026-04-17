@@ -622,7 +622,26 @@ export function transformChartValue(params: {
 }): number | null {
   const numericValue = toFiniteNumber(params.value);
   if (numericValue === null) return null;
-  return numericValue;
+
+  const metric = resolveMetricDefinition(params.card);
+
+  if (!metric.invertYAxis) {
+    return numericValue;
+  }
+
+  const min = params.range?.min;
+  const max = params.range?.max;
+
+  if (
+    typeof min !== "number" ||
+    !Number.isFinite(min) ||
+    typeof max !== "number" ||
+    !Number.isFinite(max)
+  ) {
+    return numericValue;
+  }
+
+  return roundNumber(max + min - numericValue, metric.decimals);
 }
 
 export function getChartGoalValue(params: {

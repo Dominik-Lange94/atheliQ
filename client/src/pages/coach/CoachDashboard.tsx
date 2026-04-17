@@ -305,7 +305,6 @@ function AthletKarte({
   const einheit = anzeigeEinheit(card.unit);
 
   const metricDefinition = useMemo(() => resolveMetricDefinition(card), [card]);
-  const invertYAxis = metricDefinition.invertYAxis;
   const isPaceMetric = metricDefinition.key === "pace";
   const yAxisWidth = isPaceMetric ? 76 : 40;
   const goalMode = useMemo(() => resolveGoalMode(card), [card]);
@@ -364,7 +363,35 @@ function AthletKarte({
 
   const range = useMemo(() => getValueRange(rawValues), [rawValues]);
 
-  const anzeigeDaten = chartDaten;
+  const anzeigeDaten = useMemo(() => {
+    if (!isPaceMetric) return chartDaten;
+
+    const min = range.min;
+    const max = range.max;
+
+    if (
+      typeof min !== "number" ||
+      typeof max !== "number" ||
+      !Number.isFinite(min) ||
+      !Number.isFinite(max)
+    ) {
+      return chartDaten;
+    }
+
+    return chartDaten.map((d) => ({
+      ...d,
+      wert:
+        typeof d.wert === "number"
+          ? Number((max + min - d.wert).toFixed(metricDefinition.decimals))
+          : null,
+    }));
+  }, [
+    chartDaten,
+    isPaceMetric,
+    range.min,
+    range.max,
+    metricDefinition.decimals,
+  ]);
 
   const tagesEintragIndex = entries.findIndex(
     (e: any) => toDateStr(new Date(e.recordedAt)) === ausgewaehltesdatum
@@ -561,15 +588,28 @@ function AthletKarte({
             />
 
             <YAxis
-              reversed={invertYAxis}
               width={yAxisWidth}
               tick={{ fill: chartUi.tick, fontSize: 10 }}
               axisLine={false}
               tickLine={false}
               domain={yDomain}
-              tickFormatter={(value) =>
-                isPaceMetric ? formatPaceValue(Number(value)) : String(value)
-              }
+              tickFormatter={(value) => {
+                if (isPaceMetric) {
+                  const min = range.min;
+                  const max = range.max;
+
+                  if (
+                    typeof min === "number" &&
+                    typeof max === "number" &&
+                    Number.isFinite(min) &&
+                    Number.isFinite(max)
+                  ) {
+                    return formatPaceValue(max + min - Number(value));
+                  }
+                }
+
+                return String(value);
+              }}
             />
 
             <Tooltip
