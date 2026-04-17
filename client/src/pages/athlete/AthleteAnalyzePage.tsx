@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
   ResponsiveContainer,
   ComposedChart,
@@ -1251,30 +1251,28 @@ export default function AthleteAnalyzePage() {
 
   return (
     <div className="min-h-screen bg-app">
-      <header className="border-b border-subtle px-4 py-4 sm:px-6">
-        <div className="mx-auto flex w-full max-w-7xl items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => navigate("/athlete")}
-              className="flex h-10 w-10 items-center justify-center rounded-xl border border-subtle bg-surface text-secondary transition-all hover:border-strong hover:bg-surface-2 hover:text-primary"
-              title="Zurück"
+      <header className="sticky top-0 z-40 border-b border-subtle bg-app/55 backdrop-blur-xl">
+        <div className="flex items-center justify-between px-5 py-4 sm:px-6 lg:px-8 xl:px-10">
+          <div className="flex min-w-0 items-center gap-3">
+            <Link
+              to="/athlete"
+              className="shrink-0 rounded-xl transition-opacity hover:opacity-85"
+              title="Zum Dashboard"
             >
-              <FiArrowLeft className="h-5 w-5" />
-            </button>
+              <BrandLogo showText={false} imageClassName="h-8 w-auto" />
+            </Link>
 
-            <BrandLogo showText={false} imageClassName="h-8 w-auto" />
-
-            <div>
-              <h1 className="text-lg font-semibold text-primary">
+            <div className="min-w-0">
+              <h1 className="truncate text-lg font-semibold text-primary">
                 Analyse-Dashboard
               </h1>
-              <p className="text-xs text-muted">
+              <p className="truncate text-xs text-muted">
                 Alle Metriken im Überblick mit eigenem Verlauf
               </p>
             </div>
           </div>
 
-          <div className="rounded-xl border border-subtle bg-surface px-3 py-2 text-right">
+          <div className="shrink-0 rounded-xl border border-subtle bg-surface px-3 py-2 text-right">
             <p className="text-[10px] uppercase tracking-[0.16em] text-muted">
               Zeitraum
             </p>
@@ -1285,7 +1283,7 @@ export default function AthleteAnalyzePage() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6">
+      <main className="mx-auto max-w-7xl space-y-6 px-4 py-8 sm:px-6">
         <div className="mb-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <div className="rounded-2xl border border-subtle bg-surface p-4">
             <p className="text-[10px] uppercase tracking-[0.16em] text-muted">

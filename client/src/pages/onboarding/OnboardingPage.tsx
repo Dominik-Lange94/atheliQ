@@ -1039,9 +1039,9 @@ export default function OnboardingPage() {
   }
 
   return (
-    <div className="min-h-screen bg-app">
-      <header className="border-b border-subtle px-6 py-4">
-        <div className="mx-auto flex max-w-5xl items-center justify-between gap-4">
+    <div className="min-h-screen">
+      <header className="sticky top-0 z-40 border-b border-subtle bg-app/55 backdrop-blur-xl">
+        <div className="flex items-center justify-between px-5 py-4 sm:px-6 lg:px-8 xl:px-10">
           <div className="flex items-center gap-3">
             <BrandLogo imageClassName="h-9 w-auto" />
           </div>
