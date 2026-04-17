@@ -110,6 +110,30 @@ function stripEmoji(label: string): string {
   return label.replace(/^\[[a-z]+\]\s*/u, "").replace(/^\p{Emoji}\s*/u, "");
 }
 
+function formatPaceValue(value: number | null | undefined): string {
+  if (typeof value !== "number" || !Number.isFinite(value)) return "—";
+
+  const totalSeconds = Math.round(value * 60);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+
+  return `${minutes}:${String(seconds).padStart(2, "0")}/km`;
+}
+
+function formatMetricValue(
+  value: number | null | undefined,
+  metricKey: string,
+  decimals: number,
+  unit: string
+): string {
+  if (metricKey === "pace") {
+    return formatPaceValue(value);
+  }
+
+  const formatted = formatMetricNumber(value, decimals);
+  return formatted === null ? "—" : `${formatted} ${unit}`;
+}
+
 function getCardColor(card?: Card): string {
   if (!card) return "#FFD300";
   const key = card.color ?? DEFAULT_COLORS[card.type] ?? "yellow";
@@ -406,7 +430,12 @@ function AnalyzeMetricCard({
     heightClass: string;
     fullscreen?: boolean;
   }) => {
-    const yDomain = fullscreen ? [0, "auto"] : ["auto", "auto"];
+    const isPaceMetric = metricDefinition.key === "pace";
+    const isYAxisReversed = metricDefinition.invertYAxis;
+    const yAxisWidth = isPaceMetric ? 76 : 44;
+    const chartMarginLeft = 0;
+    const yDomain: [string, string] = ["dataMin", "dataMax"];
+
     const goalLineValue = fullscreen
       ? goalDisplayValueFullscreen
       : goalDisplayValueNormal;
@@ -420,7 +449,7 @@ function AnalyzeMetricCard({
               top: 8,
               right: 8,
               bottom: 0,
-              left: fullscreen ? 0 : -18,
+              left: chartMarginLeft,
             }}
           >
             <CartesianGrid strokeDasharray="3 3" stroke={chartUi.grid} />
@@ -434,10 +463,15 @@ function AnalyzeMetricCard({
             />
 
             <YAxis
+              reversed={isYAxisReversed}
+              width={yAxisWidth}
               tick={{ fill: chartUi.tick, fontSize: fullscreen ? 12 : 11 }}
               axisLine={false}
               tickLine={false}
-              domain={yDomain as any}
+              domain={yDomain}
+              tickFormatter={(value) =>
+                isPaceMetric ? formatPaceValue(Number(value)) : String(value)
+              }
             />
 
             <Tooltip
@@ -476,8 +510,12 @@ function AnalyzeMetricCard({
                     <div style={{ marginBottom: 4, opacity: 0.7 }}>{label}</div>
 
                     <div style={{ color: cardColor, fontWeight: 600 }}>
-                      {formatMetricNumber(value, metricDefinition.decimals)}{" "}
-                      {displayUnit}
+                      {formatMetricValue(
+                        value,
+                        metricDefinition.key,
+                        metricDefinition.decimals,
+                        displayUnit
+                      )}
                     </div>
 
                     {goalActive &&
@@ -485,22 +523,25 @@ function AnalyzeMetricCard({
                       missing !== null && (
                         <div style={{ fontSize: 12, opacity: 0.8 }}>
                           Noch{" "}
-                          {formatMetricNumber(
+                          {formatMetricValue(
                             missing,
-                            metricDefinition.decimals
+                            metricDefinition.key,
+                            metricDefinition.decimals,
+                            displayUnit
                           )}{" "}
-                          {displayUnit} bis Ziel
+                          bis Ziel
                         </div>
                       )}
 
                     {typeof trendValue === "number" && (
                       <div style={{ fontSize: 12, opacity: 0.6 }}>
                         Trend:{" "}
-                        {formatMetricNumber(
+                        {formatMetricValue(
                           trendValue,
-                          metricDefinition.decimals
-                        )}{" "}
-                        {displayUnit}
+                          metricDefinition.key,
+                          metricDefinition.decimals,
+                          displayUnit
+                        )}
                       </div>
                     )}
                   </div>
@@ -529,10 +570,12 @@ function AnalyzeMetricCard({
                   strokeOpacity={0.95}
                   ifOverflow="extendDomain"
                   label={{
-                    value: `Ziel: ${formatMetricNumber(
+                    value: `Ziel: ${formatMetricValue(
                       goalValue,
-                      metricDefinition.decimals
-                    )} ${displayUnit}`,
+                      metricDefinition.key,
+                      metricDefinition.decimals,
+                      displayUnit
+                    )}`,
                     position: "insideTopRight",
                     fill: "#FFD300",
                     fontSize: fullscreen ? 11 : 10,
@@ -843,12 +886,12 @@ function AnalyzeMetricCard({
                 Letzter Wert
               </p>
               <p className="text-sm font-semibold text-primary">
-                {typeof latestValue === "number"
-                  ? `${formatMetricNumber(
-                      latestValue,
-                      metricDefinition.decimals
-                    )} ${displayUnit}`
-                  : "—"}
+                {formatMetricValue(
+                  latestValue,
+                  metricDefinition.key,
+                  metricDefinition.decimals,
+                  displayUnit
+                )}
               </p>
             </div>
           </div>
@@ -866,10 +909,12 @@ function AnalyzeMetricCard({
               <p className="mt-1 text-xs text-muted">
                 {summary.trend.delta === null
                   ? "—"
-                  : `${summary.trend.delta > 0 ? "+" : ""}${formatMetricNumber(
-                      summary.trend.delta,
-                      metricDefinition.decimals
-                    )} ${displayUnit}`}
+                  : `${summary.trend.delta > 0 ? "+" : ""}${formatMetricValue(
+                      Math.abs(summary.trend.delta),
+                      metricDefinition.key,
+                      metricDefinition.decimals,
+                      displayUnit
+                    )}`}
               </p>
             </div>
           </div>
@@ -892,10 +937,18 @@ function AnalyzeMetricCard({
             </p>
             <div className="mt-2 flex-1">
               <p className="text-sm font-semibold text-primary">
-                {formatMetricNumber(summary.avg, metricDefinition.decimals) ??
-                  "—"}
+                {formatMetricValue(
+                  summary.avg,
+                  metricDefinition.key,
+                  metricDefinition.decimals,
+                  displayUnit
+                )}
               </p>
-              <p className="mt-1 text-xs text-muted">{displayUnit}</p>
+              <p className="mt-1 text-xs text-muted">
+                {metricDefinition.key === "pace"
+                  ? "pro Kilometer"
+                  : displayUnit}
+              </p>
             </div>
           </div>
 
@@ -1065,8 +1118,12 @@ function AnalyzeMetricCard({
                 {goalActive && typeof goalValue === "number" && (
                   <p className="mt-1 text-sm text-[#c99700] dark:text-[#FFD300]">
                     Ziel:{" "}
-                    {formatMetricNumber(goalValue, metricDefinition.decimals)}{" "}
-                    {displayUnit}
+                    {formatMetricValue(
+                      goalValue,
+                      metricDefinition.key,
+                      metricDefinition.decimals,
+                      displayUnit
+                    )}
                   </p>
                 )}
               </div>

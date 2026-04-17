@@ -101,7 +101,7 @@ export const METRIC_DEFINITIONS: Record<string, MetricDefinition> = {
   pace: {
     key: "pace",
     betterDirection: "lower",
-    invertYAxis: false,
+    invertYAxis: true,
     decimals: 2,
     defaultGoalMode: "at_most",
     deriveValue: (entry) => {

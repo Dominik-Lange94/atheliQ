@@ -82,6 +82,16 @@ function stripEmoji(label: string): string {
   return label.replace(/^\[[a-z]+\]\s*/, "").replace(/^\p{Emoji}\s*/u, "");
 }
 
+function formatPaceTick(value: number): string {
+  if (!Number.isFinite(value)) return "";
+
+  const totalSeconds = Math.round(value * 60);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+
+  return `${minutes}:${String(seconds).padStart(2, "0")}/km`;
+}
+
 function getDisplayUnit(unit: string): string {
   if (!unit.startsWith("custom||")) return unit;
 
@@ -289,6 +299,11 @@ export default function MainChart({
       ? "text-rose-500"
       : "text-primary";
 
+  const isYAxisReversed = metricDefinition.invertYAxis;
+  const isPaceMetric = metricDefinition.key === "pace";
+  const chartMarginLeft = isPaceMetric ? 0 : 0;
+  const yAxisWidth = isPaceMetric ? 76 : 40;
+
   return (
     <div className="rounded-2xl border border-subtle bg-surface p-5">
       {selectedCards.length > 1 && (
@@ -454,7 +469,7 @@ export default function MainChart({
         <ResponsiveContainer width="100%" height={220}>
           <ComposedChart
             data={chartData}
-            margin={{ top: 4, right: 8, bottom: 0, left: -16 }}
+            margin={{ top: 4, right: 8, bottom: 0, left: chartMarginLeft }}
           >
             <CartesianGrid strokeDasharray="3 3" stroke={chartUi.grid} />
 
@@ -467,10 +482,15 @@ export default function MainChart({
             />
 
             <YAxis
+              reversed={isYAxisReversed}
+              width={yAxisWidth}
               tick={{ fill: chartUi.tick, fontSize: 11 }}
               axisLine={false}
               tickLine={false}
-              domain={[0, "auto"]}
+              domain={["dataMin", "dataMax"]}
+              tickFormatter={(value) =>
+                isPaceMetric ? formatPaceTick(Number(value)) : String(value)
+              }
             />
 
             <Tooltip

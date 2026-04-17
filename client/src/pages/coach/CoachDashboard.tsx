@@ -40,7 +40,6 @@ import BrandLogo from "../../components/layout/BrandLogo";
 import {
   resolveMetricDefinition,
   normalizeMetricEntries,
-  shouldInvertYAxis,
   resolveGoalMode,
   isGoalReached,
   getTrendForCard,
@@ -163,7 +162,41 @@ function anzeigeEinheit(unit: string): string {
   return p1[0]?.trim() || "—";
 }
 
-function fmtWert(value: number | null | undefined, decimals = 2): string {
+function formatPaceValue(value: number | null | undefined): string {
+  if (typeof value !== "number" || !Number.isFinite(value)) return "—";
+
+  const totalSeconds = Math.round(value * 60);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+
+  return `${minutes}:${String(seconds).padStart(2, "0")}/km`;
+}
+
+function formatMetricValue(
+  value: number | null | undefined,
+  metricKey: string,
+  decimals: number,
+  unit: string
+): string {
+  if (metricKey === "pace") {
+    return formatPaceValue(value);
+  }
+
+  const formatted = formatMetricNumber(value, decimals);
+  if (formatted == null) return "—";
+  return `${formatted} ${unit}`;
+}
+
+function fmtWert(
+  value: number | null | undefined,
+  metricKey: string,
+  decimals = 2,
+  unit = ""
+): string {
+  if (metricKey === "pace") {
+    return formatPaceValue(value);
+  }
+
   const formatted = formatMetricNumber(value, decimals);
   if (formatted == null) return "—";
   return parseFloat(formatted.toString()).toString();
@@ -272,7 +305,9 @@ function AthletKarte({
   const einheit = anzeigeEinheit(card.unit);
 
   const metricDefinition = useMemo(() => resolveMetricDefinition(card), [card]);
-  const invertYAxis = useMemo(() => shouldInvertYAxis(card), [card]);
+  const invertYAxis = metricDefinition.invertYAxis;
+  const isPaceMetric = metricDefinition.key === "pace";
+  const yAxisWidth = isPaceMetric ? 76 : 40;
   const goalMode = useMemo(() => resolveGoalMode(card), [card]);
 
   const istGewicht = card.unit === "kg";
@@ -329,28 +364,7 @@ function AthletKarte({
 
   const range = useMemo(() => getValueRange(rawValues), [rawValues]);
 
-  const anzeigeDaten = useMemo(() => {
-    if (!invertYAxis) return chartDaten;
-
-    const min = range.min;
-    const max = range.max;
-
-    if (typeof min !== "number" || typeof max !== "number") return chartDaten;
-
-    return chartDaten.map((d) => ({
-      ...d,
-      wert:
-        typeof d.wert === "number"
-          ? Number((max + min - d.wert).toFixed(metricDefinition.decimals))
-          : null,
-    }));
-  }, [
-    chartDaten,
-    invertYAxis,
-    range.min,
-    range.max,
-    metricDefinition.decimals,
-  ]);
+  const anzeigeDaten = chartDaten;
 
   const tagesEintragIndex = entries.findIndex(
     (e: any) => toDateStr(new Date(e.recordedAt)) === ausgewaehltesdatum
@@ -390,22 +404,7 @@ function AthletKarte({
         })
       : null;
 
-  const yValuesForDomain = [
-    ...anzeigeDaten
-      .map((d) => d.wert)
-      .filter((v): v is number => typeof v === "number" && Number.isFinite(v)),
-    ...(typeof zielAnzeigeWert === "number" ? [zielAnzeigeWert] : []),
-  ];
-
-  const yMin = yValuesForDomain.length > 0 ? Math.min(...yValuesForDomain) : 0;
-  const yMax = yValuesForDomain.length > 0 ? Math.max(...yValuesForDomain) : 0;
-  const yPadding =
-    yValuesForDomain.length > 0
-      ? Math.max(Math.abs(yMax - yMin) * 0.08, 0.5)
-      : 1;
-
-  const yDomain: [number, number] =
-    yValuesForDomain.length > 0 ? [yMin - yPadding, yMax + yPadding] : [0, 10];
+  const yDomain: [string, string] = ["dataMin", "dataMax"];
 
   return (
     <div
@@ -423,11 +422,18 @@ function AthletKarte({
         <div className="text-right">
           <p className="font-semibold" style={{ color: farbe }}>
             {tagesWert != null
-              ? fmtWert(tagesWert, metricDefinition.decimals)
+              ? fmtWert(
+                  tagesWert,
+                  metricDefinition.key,
+                  metricDefinition.decimals,
+                  einheit
+                )
               : chartDaten[chartDaten.length - 1]?._echt != null
               ? fmtWert(
                   chartDaten[chartDaten.length - 1]._echt,
-                  metricDefinition.decimals
+                  metricDefinition.key,
+                  metricDefinition.decimals,
+                  einheit
                 )
               : "—"}
           </p>
@@ -441,7 +447,13 @@ function AthletKarte({
           {trend.delta !== null && trend.delta !== 0 && (
             <p className={`text-xs ${trendFarbe}`}>
               {trend.delta > 0 ? "+" : ""}
-              {fmtWert(trend.delta, metricDefinition.decimals)} gesamt
+              {fmtWert(
+                Math.abs(trend.delta),
+                metricDefinition.key,
+                metricDefinition.decimals,
+                einheit
+              )}{" "}
+              gesamt
             </p>
           )}
         </div>
@@ -536,7 +548,7 @@ function AthletKarte({
         <ResponsiveContainer width="100%" height={120}>
           <ComposedChart
             data={anzeigeDaten}
-            margin={{ top: 4, right: 4, bottom: 0, left: -24 }}
+            margin={{ top: 4, right: 4, bottom: 0, left: 0 }}
           >
             <CartesianGrid strokeDasharray="3 3" stroke={chartUi.grid} />
 
@@ -549,10 +561,15 @@ function AthletKarte({
             />
 
             <YAxis
+              reversed={invertYAxis}
+              width={yAxisWidth}
               tick={{ fill: chartUi.tick, fontSize: 10 }}
               axisLine={false}
               tickLine={false}
               domain={yDomain}
+              tickFormatter={(value) =>
+                isPaceMetric ? formatPaceValue(Number(value)) : String(value)
+              }
             />
 
             <Tooltip
@@ -565,8 +582,12 @@ function AthletKarte({
               }}
               formatter={(_v: any, _n: any, props: any) => [
                 <span style={{ color: farbe }}>
-                  {fmtWert(props.payload._echt, metricDefinition.decimals)}{" "}
-                  {einheit}
+                  {formatMetricValue(
+                    props.payload._echt,
+                    metricDefinition.key,
+                    metricDefinition.decimals,
+                    einheit
+                  )}
                 </span>,
                 ohneEmoji(card.label),
               ]}
