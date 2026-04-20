@@ -24,6 +24,16 @@
 
 ---
 
+## Live Demo
+
+
+🌐 **Live App:** https://spaq-drab.vercel.app  
+🚀 **Deployment Repository:** https://github.com/southy404/spaq
+
+> Note: The backend is hosted separately. Some real-time features may depend on server availability.
+
+---
+
 ## Overview
 
 SPAQ is a modular fitness app built around two roles:
