@@ -207,6 +207,22 @@ export default function MainChart({
     }
   );
 
+  const chartBasePoints =
+    selectedCards.length && displayCard
+      ? buildChartPoints({
+          card: displayCard,
+          entries: entries ?? [],
+          labelFormatter: (recordedAt) =>
+            recordedAt.toLocaleDateString("de-DE", {
+              day: "2-digit",
+              month: "short",
+            }),
+        })
+      : [];
+
+  const rawValues = chartBasePoints.map((point) => point.rawValue);
+  const valueRange = getValueRange(rawValues);
+
   if (!selectedCards.length) {
     return (
       <div className="flex h-64 items-center justify-center rounded-2xl border border-subtle bg-surface p-8">
@@ -216,19 +232,6 @@ export default function MainChart({
       </div>
     );
   }
-
-  const chartBasePoints = buildChartPoints({
-    card: displayCard,
-    entries: entries ?? [],
-    labelFormatter: (recordedAt) =>
-      recordedAt.toLocaleDateString("de-DE", {
-        day: "2-digit",
-        month: "short",
-      }),
-  });
-
-  const rawValues = chartBasePoints.map((point) => point.rawValue);
-  const valueRange = useMemo(() => getValueRange(rawValues), [rawValues]);
 
   const summary = getMetricSummary({
     card: displayCard,
